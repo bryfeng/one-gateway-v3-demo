@@ -18,6 +18,7 @@ type PaymentKind = "Payment link" | "Invoice" | "Hosted checkout" | "API payment
 type CheckoutMethod = "Wallet" | "Exchange" | "Deposit address";
 type CheckoutStage = "choose" | "source" | "quote" | "instructions" | "processing" | "paid";
 type AssetKind = "Fiat" | "Crypto";
+type AccountKind = "Fiat account" | "Crypto wallet";
 type RecipientKind = "Bank account" | "Crypto wallet";
 type RecipientStatus = "Ready" | "Needs information" | "Pending verification";
 type OneTimePayoutStage = "recipient" | "create-recipient" | "details" | "review" | "scheduled";
@@ -31,6 +32,47 @@ interface AssetOption {
   decimals: number;
   networks?: string[];
 }
+
+interface WalletAddress {
+  network: string;
+  address: string;
+  label: string;
+}
+
+interface MerchantAccountBase {
+  id: string;
+  code: string;
+  name: string;
+  kind: AccountKind;
+  balance: string;
+  meta: string;
+  accent: string;
+  status: string;
+  statusTone: Tone;
+}
+
+interface FiatMerchantAccount extends MerchantAccountBase {
+  kind: "Fiat account";
+  accountHolder: string;
+  country: string;
+  rail: string;
+  accountLabel: string;
+  accountIdentifier: string;
+  bankCodeLabel: string;
+  bankCode: string;
+  paymentReference: string;
+}
+
+interface CryptoMerchantAccount extends MerchantAccountBase {
+  kind: "Crypto wallet";
+  assetName: string;
+  walletType: string;
+  control: string;
+  addresses: WalletAddress[];
+  primary?: boolean;
+}
+
+type MerchantAccount = FiatMerchantAccount | CryptoMerchantAccount;
 
 interface Recipient {
   id: string;
@@ -85,6 +127,119 @@ const assetCatalog: AssetOption[] = [
   { code: "SOL", name: "Solana", kind: "Crypto", balance: "640.2500 SOL", referenceUsd: 150, decimals: 4, networks: ["Solana"] },
 ];
 
+const merchantAccounts: MerchantAccount[] = [
+  {
+    id: "account-eur",
+    code: "EUR",
+    name: "Euro account",
+    kind: "Fiat account",
+    balance: "€642,850.40",
+    meta: "SEPA · Germany",
+    accent: "#315adf",
+    status: "Account active",
+    statusTone: "green",
+    accountHolder: "Northstar Gaming Europe",
+    country: "Germany",
+    rail: "SEPA",
+    accountLabel: "IBAN",
+    accountIdentifier: "DEMO-EUR-IBAN-2941",
+    bankCodeLabel: "BIC / SWIFT",
+    bankCode: "DEMO-EUR-BIC",
+    paymentReference: "DEMO-NORTHSTAR-EUR",
+  },
+  {
+    id: "account-gbp",
+    code: "GBP",
+    name: "Sterling account",
+    kind: "Fiat account",
+    balance: "£88,420.15",
+    meta: "Faster Payments · United Kingdom",
+    accent: "#6f47c5",
+    status: "Account active",
+    statusTone: "green",
+    accountHolder: "Northstar Gaming Europe",
+    country: "United Kingdom",
+    rail: "Faster Payments",
+    accountLabel: "Account number",
+    accountIdentifier: "DEMO-GBP-ACCOUNT-6110",
+    bankCodeLabel: "Sort code",
+    bankCode: "DEMO-SORT-20-00-00",
+    paymentReference: "DEMO-NORTHSTAR-GBP",
+  },
+  {
+    id: "account-usd",
+    code: "USD",
+    name: "Dollar account",
+    kind: "Fiat account",
+    balance: "$312,480.00",
+    meta: "ACH / wire · United States",
+    accent: "#176f4b",
+    status: "Account active",
+    statusTone: "green",
+    accountHolder: "Northstar Gaming Europe",
+    country: "United States",
+    rail: "ACH / wire",
+    accountLabel: "Account number",
+    accountIdentifier: "DEMO-USD-ACCOUNT-8842",
+    bankCodeLabel: "Routing number",
+    bankCode: "DEMO-ROUTING-021000",
+    paymentReference: "DEMO-NORTHSTAR-USD",
+  },
+  {
+    id: "wallet-usdc",
+    code: "USDC",
+    name: "Smart Account",
+    kind: "Crypto wallet",
+    balance: "84,620.00 USDC",
+    meta: "Main stablecoin wallet · Polygon",
+    accent: "#1b9b73",
+    status: "Primary wallet",
+    statusTone: "green",
+    assetName: "USD Coin",
+    walletType: "Merchant smart account",
+    control: "Merchant policy and signing controls",
+    primary: true,
+    addresses: [
+      { network: "Polygon", address: "DEMO-POLYGON-USDC-7F21", label: "Primary receiving address" },
+      { network: "Ethereum", address: "DEMO-ETHEREUM-USDC-4C18", label: "Ethereum receiving address" },
+      { network: "Solana", address: "DEMO-SOLANA-USDC-2D73", label: "Solana receiving address" },
+    ],
+  },
+  {
+    id: "wallet-btc",
+    code: "BTC",
+    name: "Bitcoin wallet",
+    kind: "Crypto wallet",
+    balance: "1.84250000 BTC",
+    meta: "Bitcoin network · native address",
+    accent: "#d88718",
+    status: "Wallet ready",
+    statusTone: "blue",
+    assetName: "Bitcoin",
+    walletType: "Merchant asset wallet",
+    control: "Approved wallet policy",
+    addresses: [{ network: "Bitcoin", address: "DEMO-BITCOIN-BTC-5B92", label: "Bitcoin receiving address" }],
+  },
+  {
+    id: "wallet-sol",
+    code: "SOL",
+    name: "Solana wallet",
+    kind: "Crypto wallet",
+    balance: "640.2500 SOL",
+    meta: "Solana network · native address",
+    accent: "#5b4fc5",
+    status: "Wallet ready",
+    statusTone: "blue",
+    assetName: "Solana",
+    walletType: "Merchant asset wallet",
+    control: "Approved wallet policy",
+    addresses: [{ network: "Solana", address: "DEMO-SOLANA-SOL-9A14", label: "Solana receiving address" }],
+  },
+];
+
+const fiatMerchantAccounts = merchantAccounts.filter((account): account is FiatMerchantAccount => account.kind === "Fiat account");
+const cryptoMerchantAccounts = merchantAccounts.filter((account): account is CryptoMerchantAccount => account.kind === "Crypto wallet");
+
 const initialRecipients: Recipient[] = [
   { id: "recipient-player-1042", name: "Demo Player 1042", kind: "Bank account", assetCode: "EUR", route: "SEPA · Germany", destination: "DEMO…1042", fullDestination: "DEMO-BANK-EUR-1042", status: "Ready" },
   { id: "recipient-player-2088", name: "Demo Player 2088", kind: "Crypto wallet", assetCode: "USDC", route: "Polygon · External wallet", destination: "DEMO…2088", fullDestination: "DEMO-WALLET-USDC-2088", status: "Ready" },
@@ -118,6 +273,27 @@ function parseAssetAmount(value: string) {
 
 function formatAssetAmount(value: number, asset: AssetOption) {
   return `${value.toLocaleString("en-US", { minimumFractionDigits: asset.decimals, maximumFractionDigits: asset.decimals })} ${asset.code}`;
+}
+
+async function writeClipboard(value: string) {
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    // Fall through to the selection-based copy path used by restricted preview browsers.
+  }
+  const textArea = document.createElement("textarea");
+  textArea.value = value;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
+  textArea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textArea);
+  return copied;
 }
 
 function AssetOptions() {
@@ -160,7 +336,7 @@ const viewTitles: Record<View, string> = {
   overview: "Overview",
   exchange: "Exchange",
   activation: "Activation",
-  accounts: "Accounts & flow",
+  accounts: "Accounts & wallets",
   payments: "Payments",
   payouts: "Payouts",
   settlements: "Settlements",
@@ -406,17 +582,94 @@ function NavButton({ label, mark, active, onClick }: { label: string; mark: stri
   );
 }
 
-function BalanceCard({ code, name, value, meta, accent, smart }: { code: string; name: string; value: string; meta: string; accent: string; smart?: boolean }) {
+function BalanceCard({ account, onView }: { account: MerchantAccount; onView: () => void }) {
+  const smart = account.kind === "Crypto wallet" && account.primary;
   return (
     <article className={`balance-card ${smart ? "balance-card-smart" : ""}`}>
       <div className="balance-card-top">
-        <span className="currency-mark" style={{ background: accent }}>{code.slice(0, 1)}</span>
-        <div><p>{name}</p><span>{code}</span></div>
-        {smart ? <StatusBadge label="Target smart account" tone="green" /> : null}
+        <span className="currency-mark" style={{ background: account.accent }}>{account.code.slice(0, 1)}</span>
+        <div><p>{account.name}</p><span>{account.code} · {account.kind}</span></div>
+        {smart ? <StatusBadge label="Primary" tone="green" /> : null}
       </div>
-      <strong>{value}</strong>
-      <small>{meta}</small>
+      <strong>{account.balance}</strong>
+      <small>{account.meta}</small>
+      <button className="account-card-action" onClick={onView} type="button">{account.kind === "Fiat account" ? "View account details" : "View wallet details"}</button>
     </article>
+  );
+}
+
+function AccountDetailModal({ account, selectedNetwork, onNetworkChange, onClose, onCopy }: {
+  account: MerchantAccount;
+  selectedNetwork: string;
+  onNetworkChange: (network: string) => void;
+  onClose: () => void;
+  onCopy: (value: string, label: string) => void;
+}) {
+  const walletAddress = account.kind === "Crypto wallet"
+    ? account.addresses.find((item) => item.network === selectedNetwork) ?? account.addresses[0]
+    : null;
+  const detailTitle = account.kind === "Crypto wallet" && account.primary ? "Main stablecoin wallet" : account.name;
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal account-detail-modal" role="dialog" aria-modal="true" aria-labelledby="account-detail-title">
+        <button className="modal-close" aria-label="Close" onClick={onClose} type="button">×</button>
+        <p className="eyebrow">{account.kind} · target interface</p>
+        <div className="account-detail-heading">
+          <span className="account-detail-mark" style={{ background: account.accent }}>{account.code.slice(0, 1)}</span>
+          <div><h2 id="account-detail-title">{detailTitle}</h2><p>{account.kind === "Crypto wallet" ? `${account.code} · ${walletAddress?.network}` : `${account.code} · ${account.meta}`}</p></div>
+          <StatusBadge label={account.status} tone={account.statusTone} />
+        </div>
+
+        <div className="demo-account-boundary">
+          <strong>Mock account data · do not send funds</strong>
+          <p>These identifiers are intentionally invalid. No bank account, wallet, private key, signing capability or custody arrangement exists behind this interface.</p>
+        </div>
+
+        <div className="account-balance-summary"><span>Illustrative balance</span><strong>{account.balance}</strong><small>Balance visibility is separate from the receiving instructions below.</small></div>
+
+        {account.kind === "Fiat account" ? (
+          <div className="account-detail-body">
+            <div className="account-detail-grid">
+              <div><span>Account holder</span><strong>{account.accountHolder}</strong></div>
+              <div><span>Country and rail</span><strong>{account.country} · {account.rail}</strong></div>
+            </div>
+            <div className="copyable-account-field">
+              <div><span>{account.accountLabel}</span><code>{account.accountIdentifier}</code><small>Fictional demo identifier</small></div>
+              <button className="button button-secondary" onClick={() => onCopy(account.accountIdentifier, `Demo ${account.accountLabel}`)} type="button">Copy demo {account.accountLabel}</button>
+            </div>
+            <div className="copyable-account-field">
+              <div><span>{account.bankCodeLabel}</span><code>{account.bankCode}</code><small>Fictional demo identifier</small></div>
+              <button className="button button-secondary" onClick={() => onCopy(account.bankCode, `Demo ${account.bankCodeLabel}`)} type="button">Copy demo bank code</button>
+            </div>
+            <div className="copyable-account-field">
+              <div><span>Payment reference</span><code>{account.paymentReference}</code><small>Use to illustrate automated matching</small></div>
+              <button className="button button-secondary" onClick={() => onCopy(account.paymentReference, "Demo reference")} type="button">Copy demo reference</button>
+            </div>
+          </div>
+        ) : (
+          <div className="account-detail-body">
+            {account.addresses.length > 1 ? (
+              <div className="wallet-network-selector" role="tablist" aria-label="Wallet network">
+                {account.addresses.map((item) => <button aria-selected={selectedNetwork === item.network} className={selectedNetwork === item.network ? "selected" : ""} key={item.network} onClick={() => onNetworkChange(item.network)} role="tab" type="button">{item.network}</button>)}
+              </div>
+            ) : null}
+            <div className="wallet-address-card">
+              <div className="wallet-address-heading"><div><span>{walletAddress?.label}</span><strong>{account.code} · {walletAddress?.network}</strong></div><StatusBadge label="Receiving address" tone="blue" /></div>
+              <code>{walletAddress?.address}</code>
+              <button className="button button-primary" onClick={() => walletAddress && onCopy(walletAddress.address, "Demo address")} type="button">Copy demo address</button>
+              <small>This demo address is intentionally invalid on {walletAddress?.network}. Never send funds to it.</small>
+            </div>
+            <div className="account-detail-grid account-detail-grid-three">
+              <div><span>Asset</span><strong>{account.assetName} ({account.code})</strong></div>
+              <div><span>Wallet type</span><strong>{account.walletType}</strong></div>
+              <div><span>Control model</span><strong>{account.control}</strong></div>
+            </div>
+            <div className="wallet-network-warning"><strong>Asset and network stay together</strong><p>A {account.code} address on {walletAddress?.network} is a different receiving instruction from any other asset or network. The target product always shows all three together.</p></div>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -612,7 +865,8 @@ function PaymentLinkCheckout({ onClose, onPaymentAccepted }: { onClose: () => vo
 
 export default function Home() {
   const [view, setView] = useState<View>("overview");
-  const [showSmartWallets, setShowSmartWallets] = useState(true);
+  const [selectedAccount, setSelectedAccount] = useState<MerchantAccount | null>(null);
+  const [selectedWalletNetwork, setSelectedWalletNetwork] = useState("Polygon");
   const [exchangeFrom, setExchangeFrom] = useState("USD");
   const [exchangeTo, setExchangeTo] = useState("USDC");
   const [exchangeAmount, setExchangeAmount] = useState("25,000.00");
@@ -686,6 +940,10 @@ export default function Home() {
   const payoutFundingAmount = payoutFundingCode === payoutAssetCode
     ? parseAssetAmount(payoutAmount)
     : parseAssetAmount(payoutAmount) * payoutAsset.referenceUsd / payoutFundingAsset.referenceUsd * 1.0025;
+  function openAccountDetails(account: MerchantAccount) {
+    setSelectedAccount(account);
+    if (account.kind === "Crypto wallet") setSelectedWalletNetwork(account.addresses[0].network);
+  }
 
   function chooseRecipient(recipient: Recipient) {
     setSelectedRecipientId(recipient.id);
@@ -746,9 +1004,16 @@ export default function Home() {
     setPaymentBuilderComplete(true);
   }
 
-  function copyValue(value: string) {
-    navigator.clipboard?.writeText(value).catch(() => undefined);
-    setToast("Copied to clipboard");
+  function copyValue(value: string, label = "Value") {
+    writeClipboard(value).then((copied) => setToast(copied ? `${label} copied to clipboard` : "Copy unavailable—select the value"));
+  }
+
+  function copyDemoValue(value: string, label: string) {
+    if (!value.startsWith("DEMO-")) {
+      setToast("Only fictional demo identifiers can be copied");
+      return;
+    }
+    writeClipboard(value).then((copied) => setToast(copied ? `${label} copied · fictional demo data` : "Copy unavailable—select the demo value"));
   }
 
   function acceptCheckoutPayment() {
@@ -823,19 +1088,26 @@ export default function Home() {
               </section>
 
               <section className="smart-wallet-banner">
-                <div className="smart-wallet-copy"><span className="feature-mark">S</span><div><div className="title-line"><h2>Smart account balances</h2><StatusBadge label="Target configured" tone="green" /></div><p>Show merchant-controlled stablecoin positions next to European payment accounts.</p></div></div>
-                <label className="switch-label"><span>{showSmartWallets ? "Shown" : "Hidden"}</span><input checked={showSmartWallets} onChange={(event) => setShowSmartWallets(event.target.checked)} type="checkbox" /><span className="switch" aria-hidden="true" /></label>
+                <div className="smart-wallet-copy"><span className="feature-mark">A</span><div><div className="title-line"><h2>Accounts and wallets</h2><StatusBadge label="Mock interface" tone="green" /></div><p>Fiat accounts expose bank details; crypto wallets expose a network-specific receiving address.</p></div></div>
+                <button className="button button-secondary" onClick={() => setView("accounts")} type="button">View all accounts & wallets</button>
               </section>
 
               <section className="balance-grid" aria-label="Illustrative balances">
-                <BalanceCard code="EUR" name="Euro account" value="€642,850.40" meta="Illustrative · available to pay or settle" accent="#315adf" />
-                <BalanceCard code="GBP" name="Sterling account" value="£88,420.15" meta="Illustrative · available to pay or settle" accent="#6f47c5" />
-                <BalanceCard code="USD" name="Dollar account" value="$312,480.00" meta="$25,000 currently converting" accent="#176f4b" />
-                {showSmartWallets ? <BalanceCard code="USDC" name="Smart Account" value="84,620.00 USDC" meta="Polygon · merchant policy controlled" accent="#1b9b73" smart /> : null}
+                {[...fiatMerchantAccounts, cryptoMerchantAccounts[0]].map((account) => <BalanceCard account={account} key={account.id} onView={() => openAccountDetails(account)} />)}
+              </section>
+
+              <section className="panel receiving-wallets-panel">
+                <div className="panel-heading"><div><h2>Receiving wallets</h2><p>Each wallet has its own asset, network and copyable demo address.</p></div><StatusBadge label="No live wallets" tone="gray" /></div>
+                <div className="receiving-wallet-strip">
+                  {cryptoMerchantAccounts.map((account) => {
+                    const address = account.addresses[0];
+                    return <article key={account.id}><span className="wallet-strip-mark" style={{ background: account.accent }}>{account.code.slice(0, 1)}</span><div><strong>{account.primary ? "Main stablecoin wallet" : account.name}</strong><small>{account.code} · {address.network}</small><code>{address.address}</code></div><button className="text-button" onClick={() => openAccountDetails(account)} type="button">View wallet details</button></article>;
+                  })}
+                </div>
               </section>
 
               <section className="panel staged-panel overview-stages">
-                <div className="panel-heading"><div><h2>Balance stages</h2><p>Ledger availability is kept separate from observed wallet balances.</p></div><button className="text-button" onClick={() => setView("accounts")} type="button">View accounts & flow</button></div>
+                <div className="panel-heading"><div><h2>Balance stages</h2><p>Ledger availability is kept separate from observed wallet balances.</p></div><button className="text-button" onClick={() => setView("accounts")} type="button">View accounts, wallets & flow</button></div>
                 <div className="stage-rail" aria-label="Balance stage distribution"><span className="stage-available" style={{ width: "76%" }} /><span className="stage-pending" style={{ width: "9%" }} /><span className="stage-held" style={{ width: "4%" }} /><span className="stage-converting" style={{ width: "6%" }} /><span className="stage-scheduled" style={{ width: "3%" }} /><span className="stage-transit" style={{ width: "2%" }} /></div>
                 <div className="stage-list">
                   <div><span className="dot dot-green" /><p>Available<small>Ready for use or transfer</small></p><strong>€984,110</strong></div>
@@ -931,14 +1203,26 @@ export default function Home() {
 
           {view === "accounts" ? (
             <>
-              <PageHeader title="Accounts & flow" description="How a merchant configures settlement—and what happens behind the balance.">
+              <PageHeader title="Accounts & wallets" description="View receiving instructions for every fiat account and network-specific crypto wallet.">
                 <div className="segmented-control" aria-label="Settlement mode">{(["Stablecoin", "Fiat"] as const).map((mode) => <button className={flowMode === mode ? "selected" : ""} key={mode} onClick={() => setFlowMode(mode)} type="button">{mode}</button>)}</div>
               </PageHeader>
 
-              <section className="account-profile-grid">
-                <article className="panel account-profile"><div><span className="currency-mark" style={{ background: "#1b9b73" }}>U</span><div><p>USDC smart account</p><small>Target merchant-controlled destination</small></div></div><StatusBadge label="Configured" tone="green" /><dl><div><dt>Network</dt><dd>Polygon</dd></div><div><dt>Signing authority</dt><dd>Merchant</dd></div><div><dt>Approval over</dt><dd>€50,000 equivalent</dd></div><div><dt>Daily limit</dt><dd>€500,000 equivalent</dd></div></dl></article>
-                <article className="panel account-profile"><div><span className="currency-mark" style={{ background: "#315adf" }}>E</span><div><p>EUR operating account</p><small>Illustrative bank-settlement destination</small></div></div><StatusBadge label="Target linked" tone="blue" /><dl><div><dt>Currency</dt><dd>EUR</dd></div><div><dt>Beneficiary</dt><dd>Northstar Gaming Europe</dd></div><div><dt>Settlement cycle</dt><dd>Daily · 16:00 CET</dd></div><div><dt>Account</dt><dd>DEMO-EUR-2941</dd></div></dl></article>
-                <article className="panel account-profile decisions-card"><div><span className="feature-mark">D</span><div><p>Day 30 decisions</p><small>Required before the sandbox MVP</small></div></div><ul><li>Smart account: default or optional</li><li>Fiat destination: wallet-then-sweep or direct off-ramp</li><li>Payment completion event and reconciliation evidence</li><li>Initial asset, network and settlement matrix</li></ul></article>
+              <section className="panel account-library-boundary">
+                <span className="feature-mark">i</span><div><strong>Interface-only account library</strong><p>Every value below is fictional and intentionally invalid. The target experience shows what a merchant could view and copy; it does not provision an account, generate keys or create custody.</p></div><StatusBadge label="Do not send funds" tone="amber" />
+              </section>
+
+              <section className="account-library-section">
+                <div className="panel-heading"><div><h2>Fiat accounts</h2><p>Named receiving instructions with the correct fields for each rail.</p></div><StatusBadge label="3 mock accounts" tone="blue" /></div>
+                <div className="account-library-grid">{fiatMerchantAccounts.map((account) => <BalanceCard account={account} key={account.id} onView={() => openAccountDetails(account)} />)}</div>
+              </section>
+
+              <section className="account-library-section">
+                <div className="panel-heading"><div><h2>Crypto wallets</h2><p>A primary stablecoin wallet plus network-specific Bitcoin and Solana wallets.</p></div><StatusBadge label="3 mock wallets" tone="green" /></div>
+                <div className="account-library-grid">{cryptoMerchantAccounts.map((account) => <BalanceCard account={account} key={account.id} onView={() => openAccountDetails(account)} />)}</div>
+              </section>
+
+              <section className="panel account-decisions-bar">
+                <div><span className="feature-mark">D</span><div><strong>Day 30 decisions behind this interface</strong><p>Issuer and account structure · custody/control model · initial assets and networks · settlement routes · completion and reconciliation evidence.</p></div></div><StatusBadge label="Decision required" tone="amber" />
               </section>
 
               <section className="panel funds-flow-panel">
@@ -1096,6 +1380,8 @@ export default function Home() {
           ) : null}
         </main>
       </section>
+
+      {selectedAccount ? <AccountDetailModal account={selectedAccount} onClose={() => setSelectedAccount(null)} onCopy={copyDemoValue} onNetworkChange={setSelectedWalletNetwork} selectedNetwork={selectedWalletNetwork} /> : null}
 
       {exchangeOpen ? (
         <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="exchange-review-title"><button className="modal-close" aria-label="Close" onClick={() => { setExchangeOpen(false); setExchangeComplete(false); }} type="button">×</button>{!exchangeComplete ? <><p className="eyebrow">Review exchange · {exchangeRoute}</p><h2 id="exchange-review-title">Exchange {exchangeFrom} to {exchangeTo}</h2><p className="modal-lead">Confirm the currencies, indicative output and target destination before starting the conversion.</p><div className="swap-field"><span className="swap-label">Exchange</span><div><strong>{formatAssetAmount(parseAssetAmount(exchangeAmount), exchangeFromAsset)}</strong><span>{exchangeFromAsset.balance} available</span></div></div><div className="swap-arrow">↓</div><div className="swap-field"><span className="swap-label">Receive</span><div><strong>{formatAssetAmount(exchangeOutput, exchangeToAsset)}</strong><span>{exchangeToAsset.kind === "Fiat" ? `${exchangeTo} balance account` : `${exchangeToAsset.networks?.[0]} balance`}</span></div></div><dl className="quote-details"><div><dt>Route</dt><dd>{exchangeFrom} → {exchangeTo}</dd></div><div><dt>Illustrative rate</dt><dd>1 {exchangeFrom} = {(exchangeFromAsset.referenceUsd / exchangeToAsset.referenceUsd * 0.9975).toLocaleString("en-US", { maximumFractionDigits: 8 })} {exchangeTo}</dd></div><div><dt>Illustrative spread / fee</dt><dd>0.25%</dd></div><div><dt>Quote expires</dt><dd>00:60</dd></div></dl><button className="button button-primary button-full" onClick={() => setExchangeComplete(true)} type="button">Confirm exchange</button></> : <div className="success-state"><span>✓</span><h2 id="exchange-review-title">Exchange started</h2><p><strong>{formatAssetAmount(parseAssetAmount(exchangeAmount), exchangeFromAsset)}</strong> is now converting to <strong>{formatAssetAmount(exchangeOutput, exchangeToAsset)}</strong>. Availability follows execution and reconciliation evidence.</p><button className="button button-primary" onClick={() => { setExchangeComplete(false); setExchangeOpen(false); setView("exchange"); }} type="button">View exchange activity</button></div>}</section></div>
