@@ -57,6 +57,39 @@ test("controls view separates custody evidence and requires explicit Base Sepoli
   assert.match(appSource, /84532/);
 });
 
+test("testnet evidence is frozen and duplicate sends are guarded", () => {
+  for (const label of [
+    "SubmittedTestEvidence",
+    "submittedTestEvidence",
+    "displayedTestEvidence",
+    "testRequestPending",
+    "Boolean(testTransactionHash)",
+    "Generate a new test intent before requesting another transfer.",
+    "Frozen when the wallet transaction was requested",
+    "no production payment, embedded wallet or banking rail is connected",
+    "separately labelled Base Sepolia harness",
+  ]) {
+    assert.match(appSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(appSource, /disabled=\{testRequestPending\}[^>]*>Generate new test intent/);
+
+  const sendFunction = appSource.slice(
+    appSource.indexOf("async function sendBaseSepoliaTransaction"),
+    appSource.indexOf("function acceptCheckoutPayment"),
+  );
+  assert.ok(sendFunction.indexOf("setSubmittedTestEvidence({") < sendFunction.indexOf('method: "eth_sendTransaction"'));
+  assert.match(sendFunction, /if \(testRequestPending\) return;/);
+  assert.match(sendFunction, /if \(testTransactionHash\)/);
+
+  const resetFunction = appSource.slice(
+    appSource.indexOf("function generateNewTestIntent"),
+    appSource.indexOf("async function sendBaseSepoliaTransaction"),
+  );
+  assert.match(resetFunction, /setSubmittedTestEvidence\(null\)/);
+  assert.match(appSource, /const displayedTestEvidence = testTransactionHash\s*\? submittedTestEvidence\s*:/);
+  assert.match(appSource, /<h3>\{displayedTestEvidence\?\.paymentIntentId/);
+});
+
 test("account and wallet detail journeys remain present", () => {
   for (const label of [
     "Accounts & wallets",

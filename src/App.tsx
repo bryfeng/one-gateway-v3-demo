@@ -129,6 +129,14 @@ interface TestTransactionReceipt {
   gasUsed?: string;
 }
 
+interface SubmittedTestEvidence {
+  paymentIntentId: string;
+  payerAddress: string;
+  merchantAddress: string;
+  ethAmount: string;
+  chainId: string;
+}
+
 declare global {
   interface Window {
     ethereum?: Eip1193Provider;
@@ -989,6 +997,8 @@ export default function Home() {
   const [testPaymentIntentId, setTestPaymentIntentId] = useState(createTestPaymentIntentId);
   const [testTransactionHash, setTestTransactionHash] = useState("");
   const [testTransactionReceipt, setTestTransactionReceipt] = useState<TestTransactionReceipt | null>(null);
+  const [submittedTestEvidence, setSubmittedTestEvidence] = useState<SubmittedTestEvidence | null>(null);
+  const [testRequestPending, setTestRequestPending] = useState(false);
   const [testHarnessPhase, setTestHarnessPhase] = useState<TestHarnessPhase>("idle");
   const [testHarnessMessage, setTestHarnessMessage] = useState("Connect an injected wallet to begin. Nothing is sent automatically.");
   const [testHarnessError, setTestHarnessError] = useState("");
@@ -1057,6 +1067,15 @@ export default function Home() {
     ? parseAssetAmount(payoutAmount)
     : parseAssetAmount(payoutAmount) * payoutAsset.referenceUsd / payoutFundingAsset.referenceUsd * 1.0025;
   const testChainReady = testChainId.toLowerCase() === BASE_SEPOLIA_CHAIN_ID_HEX;
+  const displayedTestEvidence = testTransactionHash
+    ? submittedTestEvidence
+    : {
+        paymentIntentId: testPaymentIntentId,
+        payerAddress: testPayerAddress,
+        merchantAddress: testMerchantAddress.trim(),
+        ethAmount: testEthAmount.trim(),
+        chainId: testChainId,
+      };
   const controlEvidenceRows: Array<{
     point: string;
     control: string;
@@ -1289,6 +1308,7 @@ export default function Home() {
   async function refreshTestReceipt() {
     if (!testTransactionHash) return;
     setTestHarnessError("");
+    setTestRequestPending(true);
     setTestHarnessMessage("Checking Base Sepolia for the transaction receipt…");
     try {
       const receipt = asTransactionReceipt(await injectedProvider().request({ method: "eth_getTransactionReceipt", params: [testTransactionHash] }));
@@ -1302,26 +1322,37 @@ export default function Home() {
       setTestHarnessMessage(receipt.status === "0x1" ? "Base Sepolia receipt confirmed successfully." : "Base Sepolia included the transaction, but its receipt reports failure.");
     } catch (error) {
       setWalletFailure(error);
+    } finally {
+      setTestRequestPending(false);
     }
   }
 
   function generateNewTestIntent() {
+    if (testRequestPending) return;
     setTestPaymentIntentId(createTestPaymentIntentId());
     setTestTransactionHash("");
     setTestTransactionReceipt(null);
+    setSubmittedTestEvidence(null);
     setTestHarnessError("");
     setTestHarnessPhase(testChainId.toLowerCase() === BASE_SEPOLIA_CHAIN_ID_HEX && testPayerAddress ? "ready" : testPayerAddress ? "connected" : "idle");
     setTestHarnessMessage("New local test intent generated. No wallet request or transaction was created.");
   }
 
   async function sendBaseSepoliaTransaction() {
+    if (testRequestPending) return;
+    if (testTransactionHash) {
+      setTestHarnessError("Generate a new test intent before requesting another transfer.");
+      return;
+    }
+    setTestRequestPending(true);
     setTestHarnessError("");
-    setTestTransactionHash("");
     setTestTransactionReceipt(null);
+    setSubmittedTestEvidence(null);
     try {
       const destination = testMerchantAddress.trim();
       if (!isEthereumAddress(destination)) throw new Error("Enter a valid merchant-controlled Base Sepolia address at runtime.");
-      const value = ethToWeiHex(testEthAmount);
+      const ethAmount = testEthAmount.trim();
+      const value = ethToWeiHex(ethAmount);
       const provider = injectedProvider();
       const chain = await provider.request({ method: "eth_chainId" });
       if (typeof chain !== "string" || chain.toLowerCase() !== BASE_SEPOLIA_CHAIN_ID_HEX) {
@@ -1334,6 +1365,13 @@ export default function Home() {
       if (!payer) throw new Error("Connect an injected wallet before requesting a transaction signature.");
       setTestPayerAddress(payer);
       setTestChainId(chain);
+      setSubmittedTestEvidence({
+        paymentIntentId: testPaymentIntentId,
+        payerAddress: payer,
+        merchantAddress: destination,
+        ethAmount,
+        chainId: chain,
+      });
       setTestHarnessPhase("awaiting-signature");
       setTestHarnessMessage("Review the destination, amount and network in your wallet. Rejecting sends nothing.");
 
@@ -1356,6 +1394,8 @@ export default function Home() {
       setTestHarnessMessage(receipt.status === "0x1" ? "Base Sepolia receipt confirmed successfully." : "Base Sepolia included the transaction, but its receipt reports failure.");
     } catch (error) {
       setWalletFailure(error);
+    } finally {
+      setTestRequestPending(false);
     }
   }
 
@@ -1416,7 +1456,7 @@ export default function Home() {
 
         <div className="service-strip">
           <span className="service-icon">i</span>
-          <p><strong>Illustrative prototype · do not send funds</strong> · Mock data and target journeys only; no live payment, wallet or banking rail is connected.</p>
+          <p><strong>Illustrative prototype · do not send production funds</strong> · Mock data and target journeys only; no production payment, embedded wallet or banking rail is connected. An optional, separately labelled Base Sepolia harness can request a user-approved public-testnet transfer.</p>
           <button onClick={() => setProfileOpen(true)} type="button">View Day 30 / 60 / 90 scope</button>
         </div>
 
@@ -1697,7 +1737,7 @@ export default function Home() {
           {view === "controls" ? (
             <>
               <PageHeader title="Controls & evidence" description="Meeting view: who owns each control, what the demo proves, and which conclusions still require provider or legal evidence.">
-                <button className="button button-secondary" onClick={generateNewTestIntent} type="button">Generate new test intent</button>
+                <button className="button button-secondary" disabled={testRequestPending} onClick={generateNewTestIntent} type="button">Generate new test intent</button>
               </PageHeader>
 
               <section className="controls-boundary-banner panel">
@@ -1806,9 +1846,9 @@ export default function Home() {
                     </label>
 
                     <div className="test-harness-actions">
-                      <button className="button button-secondary" disabled={testHarnessPhase === "connecting"} onClick={() => void connectTestWallet()} type="button">{testPayerAddress ? "Reconnect wallet" : "1 · Connect wallet"}</button>
-                      <button className="button button-secondary" disabled={!testPayerAddress || testHarnessPhase === "switching"} onClick={() => void switchToBaseSepolia()} type="button">2 · Switch / add Base Sepolia</button>
-                      <button className="button button-primary" disabled={!testPayerAddress || !testChainReady || testHarnessPhase === "awaiting-signature" || testHarnessPhase === "submitted"} type="submit">3 · Review and send test ETH</button>
+                      <button className="button button-secondary" disabled={testHarnessPhase === "connecting" || testRequestPending} onClick={() => void connectTestWallet()} type="button">{testPayerAddress ? "Reconnect wallet" : "1 · Connect wallet"}</button>
+                      <button className="button button-secondary" disabled={!testPayerAddress || testHarnessPhase === "switching" || testRequestPending} onClick={() => void switchToBaseSepolia()} type="button">2 · Switch / add Base Sepolia</button>
+                      <button className="button button-primary" disabled={!testPayerAddress || !testChainReady || Boolean(testTransactionHash) || testRequestPending} type="submit">3 · Review and send test ETH</button>
                     </div>
                     <p className="wallet-action-warning"><strong>No auto-send.</strong> Only the third button calls <code>eth_sendTransaction</code>, after the runtime fields and chain are validated. The injected wallet can still reject the request.</p>
                     <div className={`harness-message harness-message-${testHarnessError ? "error" : testHarnessPhase}`} aria-live="polite"><strong>{testHarnessError ? (testTransactionHash ? "Receipt check issue" : "Request not completed") : "Harness status"}</strong><span>{testHarnessError || testHarnessMessage}</span></div>
@@ -1816,19 +1856,19 @@ export default function Home() {
                   </form>
 
                   <aside className="test-proof-record">
-                    <div className="test-proof-heading"><div><p className="eyebrow">Evidence record</p><h3>{testPaymentIntentId}</h3></div><EvidenceBadge label={testTransactionReceipt?.status === "0x1" ? "Test-demonstrated" : "Proposed"} /></div>
+                    <div className="test-proof-heading"><div><p className="eyebrow">Evidence record</p><h3>{displayedTestEvidence?.paymentIntentId ?? "Submitted evidence unavailable"}</h3></div><EvidenceBadge label={testTransactionReceipt?.status === "0x1" ? "Test-demonstrated" : "Proposed"} /></div>
                     <dl>
-                      <div><dt>Payment-intent ID</dt><dd><code>{testPaymentIntentId}</code><small>Generated locally; not yet a production provider linkage</small></dd></div>
-                      <div><dt>Payer address</dt><dd><code>{testPayerAddress || "Not connected"}</code></dd></div>
-                      <div><dt>Merchant destination</dt><dd><code>{testMerchantAddress.trim() || "Runtime input required"}</code></dd></div>
-                      <div><dt>Value</dt><dd>{testEthAmount.trim() ? `${testEthAmount.trim()} test ETH` : "Runtime input required"}</dd></div>
-                      <div><dt>Chain ID</dt><dd>{testChainId ? `${Number.parseInt(testChainId, 16)} · ${testChainId}` : `${BASE_SEPOLIA_CHAIN_ID} expected`}</dd></div>
+                      <div><dt>Payment-intent ID</dt><dd><code>{displayedTestEvidence?.paymentIntentId ?? "Submitted evidence unavailable"}</code><small>{testTransactionHash ? "Frozen when the wallet transaction was requested; not a production provider linkage" : "Generated locally; not yet a production provider linkage"}</small></dd></div>
+                      <div><dt>Payer address</dt><dd><code>{displayedTestEvidence?.payerAddress || (testTransactionHash ? "Submitted evidence unavailable" : "Not connected")}</code></dd></div>
+                      <div><dt>Merchant destination</dt><dd><code>{displayedTestEvidence?.merchantAddress || (testTransactionHash ? "Submitted evidence unavailable" : "Runtime input required")}</code></dd></div>
+                      <div><dt>Value</dt><dd>{displayedTestEvidence?.ethAmount ? `${displayedTestEvidence.ethAmount} test ETH` : testTransactionHash ? "Submitted evidence unavailable" : "Runtime input required"}</dd></div>
+                      <div><dt>Chain ID</dt><dd>{displayedTestEvidence?.chainId ? `${Number.parseInt(displayedTestEvidence.chainId, 16)} · ${displayedTestEvidence.chainId}` : testTransactionHash ? "Submitted evidence unavailable" : `${BASE_SEPOLIA_CHAIN_ID} expected`}</dd></div>
                       <div><dt>Transaction hash</dt><dd><code>{testTransactionHash || "Not submitted"}</code>{testTransactionHash ? <a href={`${BASE_SEPOLIA_EXPLORER_URL}/tx/${testTransactionHash}`} rel="noreferrer" target="_blank">View on BaseScan</a> : null}</dd></div>
                       <div><dt>Receipt status</dt><dd>{testTransactionReceipt ? (testTransactionReceipt.status === "0x1" ? "Success" : "Failed") : "Pending"}</dd></div>
                       <div><dt>Receipt block</dt><dd>{displayBlockNumber(testTransactionReceipt?.blockNumber)}</dd></div>
                       <div><dt>Gas used</dt><dd><code>{testTransactionReceipt?.gasUsed ?? "Pending"}</code></dd></div>
                     </dl>
-                    {testTransactionHash ? <button className="button button-secondary button-full" onClick={() => void refreshTestReceipt()} type="button">Check receipt</button> : null}
+                    {testTransactionHash ? <button className="button button-secondary button-full" disabled={testRequestPending} onClick={() => void refreshTestReceipt()} type="button">Check receipt</button> : null}
                     <div className="proof-linkage-note"><strong>Original-intent linkage boundary</strong><p>This screen groups the local intent and testnet receipt for discussion. Production linkage still requires persisted Dynamic IDs, generated address, quote, webhook and any refund record.</p></div>
                   </aside>
                 </div>
