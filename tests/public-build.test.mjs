@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const appSource = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+const dynamicClientSource = await readFile(new URL("../src/dynamicClient.ts", import.meta.url), "utf8");
+const dynamicWalletSource = await readFile(new URL("../src/DynamicWalletConnection.tsx", import.meta.url), "utf8");
+const mainSource = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
 const builtHtml = await readFile(new URL("../dist/index.html", import.meta.url), "utf8");
 
 test("build produces a static entry point for GitHub Pages", () => {
@@ -55,6 +58,48 @@ test("controls view separates custody evidence and requires explicit Base Sepoli
     assert.match(appSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(appSource, /84532/);
+});
+
+test("Dynamic uses the supplied environment and external injected wallets only", () => {
+  assert.match(dynamicClientSource, /3608a494-ff5c-4cbc-a425-ddc382e4a90a/);
+  assert.match(dynamicClientSource, /@dynamic-labs-sdk\/evm\/eip6963/);
+  assert.match(dynamicClientSource, /addEIP6963Extension\(dynamicClient\)/);
+  assert.match(dynamicClientSource, /@dynamic-labs-sdk\/evm\/window-injected/);
+  assert.match(dynamicClientSource, /addEvmWindowInjectedExtension\(dynamicClient\)/);
+  assert.doesNotMatch(dynamicClientSource, /addEvmExtension|addWalletConnectEvmExtension|addWaasEvmExtension|createWaasWalletAccounts/);
+  assert.match(mainSource, /QueryClientProvider/);
+  assert.match(mainSource, /DynamicProvider client=\{dynamicClient\}/);
+});
+
+test("Dynamic wallet ownership is real but cannot submit a payment", () => {
+  for (const label of [
+    "useConnectAndVerifyWithWalletProvider",
+    "Connect + sign ownership proof",
+    "useProveWalletAccountOwnership",
+    "Fresh Dynamic challenge verified in this page",
+    "the stored credential alone cannot unlock checkout",
+    "WalletConnect is intentionally unavailable",
+    "It does not create a Flow",
+  ]) {
+    assert.match(dynamicWalletSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.doesNotMatch(dynamicWalletSource, /method:\s*["']eth_sendTransaction|useSubmitFlowTransaction|useAttachFlowSource|useGetFlowQuote/);
+  assert.match(appSource, /disabled=\{method === "Wallet" && !verifiedWallet\?\.verified\}/);
+  assert.match(appSource, /Continue to illustrative quote/);
+  assert.match(appSource, /Continue illustrative payment status/);
+  assert.match(appSource, /dynamicWalletNetworks = new Set\(\["Ethereum"\]\)/);
+  assert.match(appSource, /availableAssets = method === "Wallet" \? dynamicWalletAssets : cryptoAssets/);
+  assert.match(appSource, /only Ethereum is exposed by this Dynamic environment/);
+  assert.doesNotMatch(appSource, /Simulate wallet approval/);
+});
+
+test("public Dynamic integration contains no server credential", () => {
+  const publicDynamicSource = `${dynamicClientSource}\n${dynamicWalletSource}\n${mainSource}\n${appSource}`;
+  assert.doesNotMatch(publicDynamicSource, /Authorization\s*:\s*["'`]Bearer/i);
+  assert.doesNotMatch(publicDynamicSource, /dyn_[A-Za-z0-9_-]{8,}/);
+  assert.doesNotMatch(publicDynamicSource, /DYNAMIC_API_(?:KEY|TOKEN)/);
+  assert.match(appSource, /No such credential is present in this public site/);
+  assert.match(appSource, /Base Sepolia cannot demonstrate an ETH→USDC Flow swap/);
 });
 
 test("testnet evidence is frozen and duplicate sends are guarded", () => {

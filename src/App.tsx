@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DynamicWalletConnection, type DynamicWalletSelection } from "./DynamicWalletConnection";
 
 type View =
   | "overview"
@@ -324,9 +325,11 @@ const initialRecipients: Recipient[] = [
 
 const fiatAssets = assetCatalog.filter((asset) => asset.kind === "Fiat");
 const cryptoAssets = assetCatalog.filter((asset) => asset.kind === "Crypto");
+const dynamicWalletNetworks = new Set(["Ethereum"]);
+const dynamicWalletAssets = cryptoAssets.filter((asset) => asset.networks?.some((network) => dynamicWalletNetworks.has(network)));
 
 const checkoutMethods: Array<{ method: CheckoutMethod; mark: string; title: string; detail: string }> = [
-  { method: "Wallet", mark: "W", title: "Wallet", detail: "MetaMask, Phantom, Coinbase Wallet and more" },
+  { method: "Wallet", mark: "W", title: "Wallet", detail: "Injected EVM wallets via Dynamic" },
   { method: "Exchange", mark: "E", title: "Exchange", detail: "Pay from a supported exchange balance" },
   { method: "Deposit address", mark: "Q", title: "Deposit address", detail: "Send from anywhere—no connection needed" },
 ];
@@ -781,14 +784,17 @@ function PaymentLinkCheckout({ onClose, onPaymentAccepted }: { onClose: () => vo
   const [stage, setStage] = useState<CheckoutStage>("choose");
   const [method, setMethod] = useState<CheckoutMethod>("Wallet");
   const [assetCode, setAssetCode] = useState("USDC");
-  const [network, setNetwork] = useState("Polygon");
-  const [source, setSource] = useState("MetaMask");
+  const [network, setNetwork] = useState("Ethereum");
+  const [source, setSource] = useState("Dynamic external wallet");
+  const [verifiedWallet, setVerifiedWallet] = useState<DynamicWalletSelection | null>(null);
   const [copied, setCopied] = useState(false);
   const asset = getAsset(assetCode);
+  const availableAssets = method === "Wallet" ? dynamicWalletAssets : cryptoAssets;
+  const availableNetworks = method === "Wallet"
+    ? asset.networks?.filter((assetNetwork) => dynamicWalletNetworks.has(assetNetwork))
+    : asset.networks;
   const quoteAmount = checkoutQuoteAmounts[assetCode] ?? "10,927.33";
-  const sourceOptions = method === "Wallet"
-    ? ["MetaMask", "Phantom", "Coinbase Wallet"]
-    : method === "Exchange"
+  const sourceOptions = method === "Exchange"
       ? ["Coinbase", "Kraken", "Binance"]
       : [];
   const progressIndex = stage === "choose" || stage === "source" ? 0 : stage === "quote" ? 1 : stage === "instructions" ? 2 : 3;
@@ -801,15 +807,21 @@ function PaymentLinkCheckout({ onClose, onPaymentAccepted }: { onClose: () => vo
 
   function selectMethod(nextMethod: CheckoutMethod) {
     setMethod(nextMethod);
-    setSource(nextMethod === "Wallet" ? "MetaMask" : nextMethod === "Exchange" ? "Coinbase" : "One-time address");
+    if (nextMethod === "Wallet") {
+      setAssetCode("USDC");
+      setNetwork("Ethereum");
+    }
+    setSource(nextMethod === "Wallet" ? "Dynamic external wallet" : nextMethod === "Exchange" ? "Coinbase" : "One-time address");
+    setVerifiedWallet(null);
     setCopied(false);
     setStage("source");
   }
 
   function selectAsset(nextCode: string) {
     const nextAsset = getAsset(nextCode);
+    const nextNetworks = nextAsset.networks?.filter((assetNetwork) => method !== "Wallet" || dynamicWalletNetworks.has(assetNetwork));
     setAssetCode(nextCode);
-    setNetwork(nextAsset.networks?.[0] ?? "Native network");
+    setNetwork(nextNetworks?.[0] ?? "Native network");
   }
 
   function copyCheckoutAddress() {
@@ -820,8 +832,9 @@ function PaymentLinkCheckout({ onClose, onPaymentAccepted }: { onClose: () => vo
     setStage("choose");
     setMethod("Wallet");
     setAssetCode("USDC");
-    setNetwork("Polygon");
-    setSource("MetaMask");
+    setNetwork("Ethereum");
+    setSource("Dynamic external wallet");
+    setVerifiedWallet(null);
     setCopied(false);
   }
 
@@ -859,14 +872,16 @@ function PaymentLinkCheckout({ onClose, onPaymentAccepted }: { onClose: () => vo
               <button className="payer-back" onClick={() => setStage("choose")} type="button">← Payment methods</button>
               <p className="eyebrow">{method}</p>
               <h1>{method === "Wallet" ? "Choose a wallet" : method === "Exchange" ? "Choose an exchange" : "Choose what you’ll send"}</h1>
-              <p className="payer-stage-lead">{method === "Deposit address" ? "We’ll generate a fresh address for this payment attempt. No wallet connection or sign-in is required." : `This preview simulates the ${method.toLowerCase()} handoff. It does not connect to a real account.`}</p>
-              {sourceOptions.length ? <div className="payer-source-grid" role="group" aria-label={`${method} source`}>{sourceOptions.map((option) => <button aria-pressed={source === option} className={source === option ? "selected" : ""} key={option} onClick={() => setSource(option)} type="button"><span>{option.slice(0, 1)}</span><strong>{option}</strong><small>{method === "Wallet" ? (option === "Phantom" ? "Solana · EVM" : "EVM") : "Exchange balance"}</small></button>)}</div> : null}
+              <p className="payer-stage-lead">{method === "Wallet" ? "Dynamic now handles the real external-wallet connection and ownership signature. The quote and payment stages that follow remain illustrative and move no funds." : method === "Deposit address" ? "We’ll generate a fresh address for this payment attempt. No wallet connection or sign-in is required." : `This preview simulates the ${method.toLowerCase()} handoff. It does not connect to a real account.`}</p>
+              {method === "Wallet" ? <DynamicWalletConnection compact onClear={() => { setVerifiedWallet(null); setSource("Dynamic external wallet"); }} onVerified={(wallet) => { setVerifiedWallet(wallet); setSource(wallet.providerName); }} selectedAddress={verifiedWallet?.address} /> : null}
+              {sourceOptions.length ? <div className="payer-source-grid" role="group" aria-label={`${method} source`}>{sourceOptions.map((option) => <button aria-pressed={source === option} className={source === option ? "selected" : ""} key={option} onClick={() => setSource(option)} type="button"><span>{option.slice(0, 1)}</span><strong>{option}</strong><small>Exchange balance</small></button>)}</div> : null}
               <div className="payer-source-fields">
-                <label>Pay with<select value={assetCode} onChange={(event) => selectAsset(event.target.value)}>{cryptoAssets.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.name}</option>)}</select></label>
-                <label>Network<select value={network} onChange={(event) => setNetwork(event.target.value)}>{asset.networks?.map((option) => <option key={option}>{option}</option>)}</select></label>
+                <label>Pay with<select value={assetCode} onChange={(event) => selectAsset(event.target.value)}>{availableAssets.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.name}</option>)}</select></label>
+                <label>Network<select value={network} onChange={(event) => setNetwork(event.target.value)}>{availableNetworks?.map((option) => <option key={option}>{option}</option>)}</select></label>
               </div>
-              <div className="payer-source-summary"><span className="payer-method-mark">{method.slice(0, 1)}</span><div><small>Selected source</small><strong>{source} · {assetCode} on {network}</strong></div><StatusBadge label="Illustrative" tone="blue" /></div>
-              <button className="button button-primary button-full payer-main-action" onClick={() => setStage("quote")} type="button">Get payment quote</button>
+              {method === "Wallet" ? <p className="dynamic-scope-note"><strong>Network boundary:</strong> only Ethereum is exposed by this Dynamic environment. The separate Base Sepolia proof is available under Controls &amp; evidence.</p> : null}
+              <div className="payer-source-summary"><span className="payer-method-mark">{method.slice(0, 1)}</span><div><small>Selected source</small><strong>{method === "Wallet" && verifiedWallet ? `${source} · ${verifiedWallet.address.slice(0, 8)}…${verifiedWallet.address.slice(-6)}` : `${source} · ${assetCode} on ${network}`}</strong></div><StatusBadge label={method === "Wallet" ? (verifiedWallet?.verified ? "Ownership verified" : "Action required") : "Illustrative"} tone={method === "Wallet" && !verifiedWallet?.verified ? "amber" : "blue"} /></div>
+              <button className="button button-primary button-full payer-main-action" disabled={method === "Wallet" && !verifiedWallet?.verified} onClick={() => setStage("quote")} type="button">{method === "Wallet" ? "Continue to illustrative quote" : "Get payment quote"}</button>
             </div>
           ) : null}
 
@@ -902,7 +917,7 @@ function PaymentLinkCheckout({ onClose, onPaymentAccepted }: { onClose: () => vo
               </div>
               <dl className="payer-quote-details payer-instructions-detail"><div><dt>Exact amount</dt><dd>{quoteAmount} {assetCode}</dd></div><div><dt>Network</dt><dd>{network}</dd></div><div><dt>Address expires</dt><dd>48 hours</dd></div></dl>
               <div className="payer-network-warning"><strong>Only send {assetCode} on {network}.</strong><span>Using another asset or network can permanently lose funds. On-chain transfers cannot be reversed.</span></div>
-              <button className="button button-primary button-full payer-main-action" onClick={() => setStage("processing")} type="button">{method === "Wallet" ? "Simulate wallet approval" : method === "Exchange" ? "Simulate exchange transfer" : "I’ve sent the payment"}</button>
+              <button className="button button-primary button-full payer-main-action" onClick={() => setStage("processing")} type="button">{method === "Wallet" ? "Continue illustrative payment status" : method === "Exchange" ? "Simulate exchange transfer" : "I’ve sent the payment"}</button>
             </div>
           ) : null}
 
@@ -1812,14 +1827,24 @@ export default function Home() {
                 <article className="panel evidence-route-card evidence-route-testnet">
                   <div className="evidence-route-heading"><span className="feature-mark">T</span><div><p className="eyebrow">Runnable proof</p><h2>Base Sepolia payer-signature harness</h2></div><EvidenceBadge label={testTransactionReceipt?.status === "0x1" ? "Test-demonstrated" : "Unconfirmed"} /></div>
                   <p><strong>Runtime payer wallet → runtime merchant address · native test ETH on Base Sepolia.</strong></p>
-                  <ul><li>Can prove the payer’s injected wallet submitted a transaction.</li><li>Can prove successful public-testnet funds movement when a receipt reports success.</li><li>Does not use Dynamic or prove conversion, screening, deposit-address custody or USDC settlement.</li></ul>
+                  <ul><li>Can prove the payer’s injected wallet submitted a transaction.</li><li>Can prove successful public-testnet funds movement when a receipt reports success.</li><li>The transfer itself does not use Dynamic or prove conversion, screening, deposit-address custody or USDC settlement.</li></ul>
                 </article>
                 <article className="panel evidence-route-card">
-                  <div className="evidence-route-heading"><span className="feature-mark">D</span><div><p className="eyebrow">Separate evidence track</p><h2>Dynamic Flow · Base mainnet ETH → USDC</h2></div><EvidenceBadge label="Dynamic-provided" /></div>
+                  <div className="evidence-route-heading"><span className="feature-mark">D</span><div><p className="eyebrow">Separate production track</p><h2>Dynamic Flow · Base mainnet ETH → USDC</h2></div><EvidenceBadge label="Unconfirmed" /></div>
                   <p><strong>Payer ETH → Flow-generated deposit address → external execution → merchant-controlled Base USDC destination.</strong></p>
-                  <ul><li>Quote-only preparation; mainnet execution has not been run.</li><li>No generated address, controller, executor, screening decision, refund authority or settlement hash is represented as proven.</li><li>Any mainnet transaction requires a separate, explicit authorization outside this harness.</li></ul>
+                  <ul><li>The Dynamic browser SDK is integrated below; Flow creation and mainnet execution have not been run.</li><li>No generated address, controller, executor, screening decision, refund authority or settlement hash is represented as proven.</li><li>Base Sepolia cannot demonstrate an ETH→USDC Flow swap; Dynamic testnet Flow supports wallet-source same-token routes only.</li><li>Any mainnet transaction requires a separate, explicit authorization outside this harness.</li></ul>
                   <div className="quote-only-strip"><StatusBadge label="Quote-only" tone="blue" /><span>Mainnet execution not run</span></div>
                 </article>
+              </section>
+
+              <section className="panel dynamic-evidence-panel">
+                <DynamicWalletConnection />
+                <div className="dynamic-flow-boundary">
+                  <div><span className="feature-mark">1</span><p><strong>Server creates the payment Flow</strong><small>Requires a private <code>flow.write</code> API token. No such credential is present in this public site.</small></p></div>
+                  <div><span className="feature-mark">2</span><p><strong>Browser attaches the verified wallet</strong><small>Dynamic returns a Flow-scoped session capability, then prepares quote and signing steps.</small></p></div>
+                  <div><span className="feature-mark">3</span><p><strong>Providers execute and settle</strong><small>Provider IDs, transaction hashes, webhooks, refund records and final settlement remain separate evidence.</small></p></div>
+                </div>
+                <div className="mandatory-control-note"><strong>Current environment boundary</strong><p>The supplied Dynamic sandbox publicly exposes Ethereum mainnet, not Base Sepolia. Flow entitlement and the server API token remain unconfirmed. Enabling a network in Dynamic does not place ONE in custody; contracts, key control, routing authority, refund authority and settlement evidence still determine the operational and legal analysis.</p></div>
               </section>
 
               <section className="panel test-harness-panel">
