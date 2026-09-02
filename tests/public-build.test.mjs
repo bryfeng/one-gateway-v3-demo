@@ -19,9 +19,42 @@ test("public prototype retains the key merchant journeys", () => {
     "Exchange",
     "Reporting",
     "Smart Account",
+    "Controls & evidence",
   ]) {
     assert.match(appSource, new RegExp(label));
   }
+});
+
+test("controls view separates custody evidence and requires explicit Base Sepolia wallet actions", () => {
+  for (const label of [
+    "Ownership and control matrix",
+    "Payer wallet",
+    "Flow-generated deposit address",
+    "External execution",
+    "Merchant destination",
+    "ONE policy / refusal boundary",
+    "ONE-owned acceptance",
+    "Merchant-owned acceptance",
+    "Downstream ONE access",
+    "Gateway services · screening required",
+    "Self-custody checkout only",
+    "a later tier change does not make an unscreened balance eligible",
+    "No waiver of mandatory controls",
+    "Refund control",
+    "Original payment-intent linkage",
+    "Test-demonstrated",
+    "Dynamic-provided",
+    "Legal decision",
+    "wallet_switchEthereumChain",
+    "wallet_addEthereumChain",
+    "eth_sendTransaction",
+    "eth_getTransactionReceipt",
+    "No auto-send",
+    "Mainnet execution not run",
+  ]) {
+    assert.match(appSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(appSource, /84532/);
 });
 
 test("account and wallet detail journeys remain present", () => {

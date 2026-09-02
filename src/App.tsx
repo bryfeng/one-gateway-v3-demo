@@ -11,8 +11,11 @@ type View =
   | "payouts"
   | "settlements"
   | "reporting"
+  | "controls"
   | "developer";
 type Tone = "green" | "blue" | "amber" | "red" | "gray" | "purple";
+type EvidenceLabel = "Test-demonstrated" | "Dynamic-provided" | "Proposed" | "Unconfirmed" | "Legal decision";
+type TestHarnessPhase = "idle" | "connecting" | "connected" | "switching" | "ready" | "awaiting-signature" | "submitted" | "confirmed" | "failed";
 type CustomerType = "iGaming operator" | "Prop firm" | "PSP";
 type PaymentKind = "Payment link" | "Invoice" | "Hosted checkout" | "API payment";
 type CheckoutMethod = "Wallet" | "Exchange" | "Deposit address";
@@ -109,6 +112,71 @@ interface SettlementRow {
   tone: Tone;
   matched: string;
   step: number;
+}
+
+interface Eip1193Provider {
+  request(args: { method: string; params?: readonly unknown[] | Record<string, unknown> }): Promise<unknown>;
+  on?(event: string, listener: (value: unknown) => void): void;
+  removeListener?(event: string, listener: (value: unknown) => void): void;
+}
+
+interface TestTransactionReceipt {
+  transactionHash?: string;
+  blockNumber?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+  gasUsed?: string;
+}
+
+declare global {
+  interface Window {
+    ethereum?: Eip1193Provider;
+  }
+}
+
+const BASE_SEPOLIA_CHAIN_ID_HEX = "0x14a34";
+const BASE_SEPOLIA_CHAIN_ID = 84532;
+const BASE_SEPOLIA_RPC_URL = "https://sepolia.base.org";
+const BASE_SEPOLIA_EXPLORER_URL = "https://sepolia.basescan.org";
+
+function createTestPaymentIntentId() {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `TEST-BS-${timestamp}-${random}`;
+}
+
+function isEthereumAddress(value: string) {
+  return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
+}
+
+function ethToWeiHex(value: string) {
+  const normalized = value.trim();
+  if (!/^\d+(?:\.\d{1,18})?$/.test(normalized)) throw new Error("Enter a positive ETH amount with no more than 18 decimal places.");
+  const [whole, fraction = ""] = normalized.split(".");
+  const wei = BigInt(whole) * (10n ** 18n) + BigInt(fraction.padEnd(18, "0"));
+  if (wei <= 0n) throw new Error("Enter an ETH amount greater than zero.");
+  return `0x${wei.toString(16)}`;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "The wallet request did not complete.";
+}
+
+function providerErrorCode(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error)) return undefined;
+  return Number((error as { code?: unknown }).code);
+}
+
+function asTransactionReceipt(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  return value as TestTransactionReceipt;
+}
+
+function displayBlockNumber(value?: string) {
+  if (!value) return "Pending";
+  const parsed = Number.parseInt(value, 16);
+  return Number.isFinite(parsed) ? parsed.toLocaleString("en-US") : value;
 }
 
 const assetCatalog: AssetOption[] = [
@@ -328,7 +396,10 @@ const navGroups: Array<{ label: string; items: Array<{ id: View; label: string; 
   },
   {
     label: "Build",
-    items: [{ id: "developer", label: "Developer", mark: "D" }],
+    items: [
+      { id: "controls", label: "Controls & evidence", mark: "C" },
+      { id: "developer", label: "Developer", mark: "D" },
+    ],
   },
 ];
 
@@ -341,6 +412,7 @@ const viewTitles: Record<View, string> = {
   payouts: "Payouts",
   settlements: "Settlements",
   reporting: "Reporting",
+  controls: "Controls & evidence",
   developer: "Developer",
 };
 
@@ -571,6 +643,11 @@ const customerPhaseMatrix: Record<CustomerType, Array<{ phase: string; tone: Ton
 
 function StatusBadge({ label, tone }: { label: string; tone: Tone }) {
   return <span className={`status status-${tone}`}>{label}</span>;
+}
+
+function EvidenceBadge({ label }: { label: EvidenceLabel }) {
+  const className = label.toLowerCase().replace(/[^a-z]+/g, "-");
+  return <span className={`evidence-status evidence-status-${className}`}>{label}</span>;
 }
 
 function NavButton({ label, mark, active, onClick }: { label: string; mark: string; active?: boolean; onClick: () => void }) {
@@ -905,6 +982,16 @@ export default function Home() {
   const [flowMode, setFlowMode] = useState<"Stablecoin" | "Fiat">("Stablecoin");
   const [selectedSettlement, setSelectedSettlement] = useState<SettlementRow>(settlementRows[0]);
   const [environment, setEnvironment] = useState<"Sandbox" | "Target live">("Sandbox");
+  const [testMerchantAddress, setTestMerchantAddress] = useState("");
+  const [testEthAmount, setTestEthAmount] = useState("");
+  const [testPayerAddress, setTestPayerAddress] = useState("");
+  const [testChainId, setTestChainId] = useState("");
+  const [testPaymentIntentId, setTestPaymentIntentId] = useState(createTestPaymentIntentId);
+  const [testTransactionHash, setTestTransactionHash] = useState("");
+  const [testTransactionReceipt, setTestTransactionReceipt] = useState<TestTransactionReceipt | null>(null);
+  const [testHarnessPhase, setTestHarnessPhase] = useState<TestHarnessPhase>("idle");
+  const [testHarnessMessage, setTestHarnessMessage] = useState("Connect an injected wallet to begin. Nothing is sent automatically.");
+  const [testHarnessError, setTestHarnessError] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [customerType, setCustomerType] = useState<CustomerType>("iGaming operator");
   const [toast, setToast] = useState("");
@@ -918,6 +1005,35 @@ export default function Home() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [view]);
+
+  useEffect(() => {
+    const provider = window.ethereum;
+    if (!provider?.on) return;
+
+    const handleAccountsChanged = (value: unknown) => {
+      const accounts = Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+      setTestPayerAddress(accounts[0] ?? "");
+      if (!accounts.length) {
+        setTestHarnessPhase("idle");
+        setTestHarnessMessage("Wallet disconnected. Connect again before preparing a test transfer.");
+      }
+    };
+    const handleChainChanged = (value: unknown) => {
+      if (typeof value !== "string") return;
+      setTestChainId(value);
+      setTestHarnessPhase(value.toLowerCase() === BASE_SEPOLIA_CHAIN_ID_HEX ? "ready" : "connected");
+      setTestHarnessMessage(value.toLowerCase() === BASE_SEPOLIA_CHAIN_ID_HEX
+        ? "Base Sepolia selected. Review the runtime destination and amount before requesting a wallet signature."
+        : "Wallet connected on another network. Use the explicit switch/add control before sending.");
+    };
+
+    provider.on("accountsChanged", handleAccountsChanged);
+    provider.on("chainChanged", handleChainChanged);
+    return () => {
+      provider.removeListener?.("accountsChanged", handleAccountsChanged);
+      provider.removeListener?.("chainChanged", handleChainChanged);
+    };
+  }, []);
 
   const visiblePayments = useMemo(() => {
     if (paymentFilter === "Processing") return payments.filter((row) => row.status === "Processing");
@@ -940,6 +1056,80 @@ export default function Home() {
   const payoutFundingAmount = payoutFundingCode === payoutAssetCode
     ? parseAssetAmount(payoutAmount)
     : parseAssetAmount(payoutAmount) * payoutAsset.referenceUsd / payoutFundingAsset.referenceUsd * 1.0025;
+  const testChainReady = testChainId.toLowerCase() === BASE_SEPOLIA_CHAIN_ID_HEX;
+  const controlEvidenceRows: Array<{
+    point: string;
+    control: string;
+    controller: string;
+    oneRole: string;
+    evidence: string;
+    statuses: EvidenceLabel[];
+  }> = [
+    {
+      point: "Payer wallet",
+      control: "Source key and outbound test transaction",
+      controller: "Payer using an injected wallet",
+      oneRole: "Creates a local test intent; cannot sign for the payer",
+      evidence: testTransactionReceipt?.status === "0x1" ? "Successful Base Sepolia transaction receipt plus payer address" : "Connect, sign and confirm the optional Base Sepolia harness",
+      statuses: testTransactionReceipt?.status === "0x1" ? ["Test-demonstrated"] : ["Unconfirmed"],
+    },
+    {
+      point: "Flow-generated deposit address",
+      control: "Address generation, expiry, sweep and refund mechanics",
+      controller: "Dynamic/Flow architecture; controller not yet evidenced",
+      oneRole: "Requests and links an address to a payment intent",
+      evidence: "Dynamic response, contract/address inspection and written control statement",
+      statuses: ["Dynamic-provided", "Unconfirmed"],
+    },
+    {
+      point: "External execution",
+      control: "Quote, ETH→USDC conversion, fees and settlement transaction",
+      controller: "Execution provider to be identified",
+      oneRole: "Presents eligibility and provider output; no execution proven",
+      evidence: "Quote payload, named executor, fee detail and source/settlement hashes",
+      statuses: ["Unconfirmed", "Legal decision"],
+    },
+    {
+      point: "Merchant destination",
+      control: "Destination key, wallet policy and signer authority",
+      controller: "Merchant",
+      oneRole: "Stores the approved destination configuration",
+      evidence: "Merchant signature or wallet-policy record plus immutable route configuration",
+      statuses: ["Proposed", "Unconfirmed"],
+    },
+    {
+      point: "ONE policy / refusal boundary",
+      control: "Customer eligibility and refusal before a route is offered",
+      controller: "Decision model not selected: merchant or ONE",
+      oneRole: "May own checkout acceptance, or retain refusal only at ONE’s service boundary",
+      evidence: "Named policy administrator, thresholds, overrides, audit log, revocation and contracts",
+      statuses: ["Proposed", "Legal decision"],
+    },
+    {
+      point: "Downstream ONE access",
+      control: "Conversion, settlement, payout and off-ramp service entitlements",
+      controller: "Merchant elects a tier; ONE controls access to ONE services",
+      oneRole: "Conditions downstream services on screening without controlling self-custody assets",
+      evidence: "Election and policy version, entitlement log, disclosure, revocation and wallet-access test",
+      statuses: ["Proposed", "Legal decision"],
+    },
+    {
+      point: "Refund control",
+      control: "Refund address, initiating authority, asset and rate treatment",
+      controller: "Must be identified before any mainnet execution",
+      oneRole: "Links a refund request; unilateral refund authority is not assumed",
+      evidence: "Dynamic/provider response, customer terms and refund execution record",
+      statuses: ["Unconfirmed", "Legal decision"],
+    },
+    {
+      point: "Original payment-intent linkage",
+      control: "Stable ID joining request, address, quote, transaction and refund",
+      controller: "ONE record with provider and chain references",
+      oneRole: "Maintains the reference graph and audit trail",
+      evidence: "Persisted identifiers and webhook/receipt reconciliation; the local test record is not a production link",
+      statuses: ["Proposed", "Unconfirmed"],
+    },
+  ];
   function openAccountDetails(account: MerchantAccount) {
     setSelectedAccount(account);
     if (account.kind === "Crypto wallet") setSelectedWalletNetwork(account.addresses[0].network);
@@ -1014,6 +1204,159 @@ export default function Home() {
       return;
     }
     writeClipboard(value).then((copied) => setToast(copied ? `${label} copied · fictional demo data` : "Copy unavailable—select the demo value"));
+  }
+
+  function injectedProvider() {
+    const provider = window.ethereum;
+    if (!provider) throw new Error("No injected EIP-1193 wallet was detected in this browser.");
+    return provider;
+  }
+
+  function setWalletFailure(error: unknown) {
+    const rejected = providerErrorCode(error) === 4001;
+    setTestHarnessPhase("failed");
+    setTestHarnessError(rejected ? "The wallet request was rejected. No transaction was sent." : errorMessage(error));
+  }
+
+  async function connectTestWallet() {
+    setTestHarnessPhase("connecting");
+    setTestHarnessError("");
+    setTestHarnessMessage("Waiting for the wallet connection request…");
+    try {
+      const provider = injectedProvider();
+      const requestedAccounts = await provider.request({ method: "eth_requestAccounts" });
+      const accounts = Array.isArray(requestedAccounts) ? requestedAccounts.filter((item): item is string => typeof item === "string") : [];
+      if (!accounts[0]) throw new Error("The wallet did not return an account.");
+      const chain = await provider.request({ method: "eth_chainId" });
+      const chainId = typeof chain === "string" ? chain : "";
+      setTestPayerAddress(accounts[0]);
+      setTestChainId(chainId);
+      const ready = chainId.toLowerCase() === BASE_SEPOLIA_CHAIN_ID_HEX;
+      setTestHarnessPhase(ready ? "ready" : "connected");
+      setTestHarnessMessage(ready
+        ? "Wallet connected on Base Sepolia. Review the runtime destination and amount before requesting a signature."
+        : "Wallet connected. Use the separate switch/add control to select Base Sepolia.");
+    } catch (error) {
+      setWalletFailure(error);
+    }
+  }
+
+  async function switchToBaseSepolia() {
+    setTestHarnessPhase("switching");
+    setTestHarnessError("");
+    setTestHarnessMessage("Waiting for the wallet network request…");
+    try {
+      const provider = injectedProvider();
+      try {
+        await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BASE_SEPOLIA_CHAIN_ID_HEX }] });
+      } catch (error) {
+        if (providerErrorCode(error) !== 4902) throw error;
+        await provider.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: BASE_SEPOLIA_CHAIN_ID_HEX,
+            chainName: "Base Sepolia",
+            nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+            rpcUrls: [BASE_SEPOLIA_RPC_URL],
+            blockExplorerUrls: [BASE_SEPOLIA_EXPLORER_URL],
+          }],
+        });
+        await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BASE_SEPOLIA_CHAIN_ID_HEX }] });
+      }
+
+      const chain = await provider.request({ method: "eth_chainId" });
+      const accountsResult = await provider.request({ method: "eth_accounts" });
+      const accounts = Array.isArray(accountsResult) ? accountsResult.filter((item): item is string => typeof item === "string") : [];
+      setTestChainId(typeof chain === "string" ? chain : BASE_SEPOLIA_CHAIN_ID_HEX);
+      setTestPayerAddress(accounts[0] ?? testPayerAddress);
+      setTestHarnessPhase("ready");
+      setTestHarnessMessage("Base Sepolia selected. A transfer still requires the separate send button and wallet approval.");
+    } catch (error) {
+      setWalletFailure(error);
+    }
+  }
+
+  async function pollTestReceipt(provider: Eip1193Provider, transactionHash: string, attempts = 45) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const result = await provider.request({ method: "eth_getTransactionReceipt", params: [transactionHash] });
+      const receipt = asTransactionReceipt(result);
+      if (receipt) return receipt;
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    }
+    return null;
+  }
+
+  async function refreshTestReceipt() {
+    if (!testTransactionHash) return;
+    setTestHarnessError("");
+    setTestHarnessMessage("Checking Base Sepolia for the transaction receipt…");
+    try {
+      const receipt = asTransactionReceipt(await injectedProvider().request({ method: "eth_getTransactionReceipt", params: [testTransactionHash] }));
+      if (!receipt) {
+        setTestHarnessPhase("submitted");
+        setTestHarnessMessage("Transaction submitted; a receipt has not been returned yet. Check again shortly.");
+        return;
+      }
+      setTestTransactionReceipt(receipt);
+      setTestHarnessPhase("confirmed");
+      setTestHarnessMessage(receipt.status === "0x1" ? "Base Sepolia receipt confirmed successfully." : "Base Sepolia included the transaction, but its receipt reports failure.");
+    } catch (error) {
+      setWalletFailure(error);
+    }
+  }
+
+  function generateNewTestIntent() {
+    setTestPaymentIntentId(createTestPaymentIntentId());
+    setTestTransactionHash("");
+    setTestTransactionReceipt(null);
+    setTestHarnessError("");
+    setTestHarnessPhase(testChainId.toLowerCase() === BASE_SEPOLIA_CHAIN_ID_HEX && testPayerAddress ? "ready" : testPayerAddress ? "connected" : "idle");
+    setTestHarnessMessage("New local test intent generated. No wallet request or transaction was created.");
+  }
+
+  async function sendBaseSepoliaTransaction() {
+    setTestHarnessError("");
+    setTestTransactionHash("");
+    setTestTransactionReceipt(null);
+    try {
+      const destination = testMerchantAddress.trim();
+      if (!isEthereumAddress(destination)) throw new Error("Enter a valid merchant-controlled Base Sepolia address at runtime.");
+      const value = ethToWeiHex(testEthAmount);
+      const provider = injectedProvider();
+      const chain = await provider.request({ method: "eth_chainId" });
+      if (typeof chain !== "string" || chain.toLowerCase() !== BASE_SEPOLIA_CHAIN_ID_HEX) {
+        setTestChainId(typeof chain === "string" ? chain : "");
+        throw new Error("Base Sepolia is not selected. Use the explicit switch/add control first.");
+      }
+      const accountsResult = await provider.request({ method: "eth_accounts" });
+      const accounts = Array.isArray(accountsResult) ? accountsResult.filter((item): item is string => typeof item === "string") : [];
+      const payer = accounts[0] ?? testPayerAddress;
+      if (!payer) throw new Error("Connect an injected wallet before requesting a transaction signature.");
+      setTestPayerAddress(payer);
+      setTestChainId(chain);
+      setTestHarnessPhase("awaiting-signature");
+      setTestHarnessMessage("Review the destination, amount and network in your wallet. Rejecting sends nothing.");
+
+      const result = await provider.request({
+        method: "eth_sendTransaction",
+        params: [{ from: payer, to: destination, value }],
+      });
+      if (typeof result !== "string" || !/^0x[a-fA-F0-9]{64}$/.test(result)) throw new Error("The wallet did not return a valid transaction hash.");
+      setTestTransactionHash(result);
+      setTestHarnessPhase("submitted");
+      setTestHarnessMessage("Transaction submitted to Base Sepolia; polling the injected wallet for a receipt…");
+
+      const receipt = await pollTestReceipt(provider, result);
+      if (!receipt) {
+        setTestHarnessMessage("Transaction hash received, but no receipt was observed within 90 seconds. Use Check receipt or the explorer link.");
+        return;
+      }
+      setTestTransactionReceipt(receipt);
+      setTestHarnessPhase("confirmed");
+      setTestHarnessMessage(receipt.status === "0x1" ? "Base Sepolia receipt confirmed successfully." : "Base Sepolia included the transaction, but its receipt reports failure.");
+    } catch (error) {
+      setWalletFailure(error);
+    }
   }
 
   function acceptCheckoutPayment() {
@@ -1348,6 +1691,148 @@ export default function Home() {
                 <section className="panel activity-panel"><div className="panel-heading"><div><h2>Reconciliation health</h2><p>Sample control view for Finance and Operations.</p></div><StatusBadge label="99.6% matched" tone="green" /></div><div className="recon-bars"><div><span>Payments to settlement</span><b><i style={{ width: "100%" }} /></b><strong>17 / 17</strong></div><div><span>Provider events to ONE objects</span><b><i style={{ width: "98%" }} /></b><strong>52 / 53</strong></div><div><span>Payout recipients</span><b><i style={{ width: "90%" }} /></b><strong>38 / 42</strong></div></div></section>
                 <aside className="panel exception-queue"><div className="panel-heading"><div><h2>Open reconciliation items</h2><p>Safe reason categories, not raw provider flags.</p></div></div><ul><li><StatusBadge label="Verification" tone="amber" /><div><strong>PAY-8F19</strong><small>Merchant information required</small></div></li><li><StatusBadge label="Recipient" tone="amber" /><div><strong>BAT-0183-042</strong><small>Destination review</small></div></li><li><StatusBadge label="Technical" tone="blue" /><div><strong>EVT-9182</strong><small>Webhook retrying</small></div></li></ul></aside>
               </div>
+            </>
+          ) : null}
+
+          {view === "controls" ? (
+            <>
+              <PageHeader title="Controls & evidence" description="Meeting view: who owns each control, what the demo proves, and which conclusions still require provider or legal evidence.">
+                <button className="button button-secondary" onClick={generateNewTestIntent} type="button">Generate new test intent</button>
+              </PageHeader>
+
+              <section className="controls-boundary-banner panel">
+                <div>
+                  <p className="eyebrow">Evidence before conclusion</p>
+                  <h2>Technology orchestration is shown separately from possession, signing, execution and legal perimeter.</h2>
+                  <p>This view distinguishes testnet facts, Dynamic-provided architecture, proposed controls, unconfirmed points and decisions for counsel. It does not claim that non-custody alone resolves every UK regulatory question.</p>
+                </div>
+                <div className="controls-boundary-badges"><EvidenceBadge label="Proposed" /><EvidenceBadge label="Legal decision" /></div>
+              </section>
+
+              <section className="panel ownership-control-panel">
+                <div className="panel-heading">
+                  <div><h2>Ownership and control matrix</h2><p>Each assertion names its controller, ONE’s actual role and the next evidence needed.</p></div>
+                  <StatusBadge label="No mainnet run" tone="amber" />
+                </div>
+                <div className="evidence-legend" aria-label="Evidence status legend">
+                  {(["Test-demonstrated", "Dynamic-provided", "Proposed", "Unconfirmed", "Legal decision"] as EvidenceLabel[]).map((label) => <EvidenceBadge key={label} label={label} />)}
+                </div>
+                <div className="table-wrap">
+                  <table className="control-matrix">
+                    <thead><tr><th>Control point</th><th>Asset or action</th><th>Who controls it</th><th>ONE role</th><th>Evidence status</th></tr></thead>
+                    <tbody>
+                      {controlEvidenceRows.map((row) => (
+                        <tr key={row.point}>
+                          <td><strong>{row.point}</strong></td>
+                          <td>{row.control}</td>
+                          <td>{row.controller}</td>
+                          <td>{row.oneRole}</td>
+                          <td><div className="matrix-statuses">{row.statuses.map((status) => <EvidenceBadge key={status} label={status} />)}</div><small>{row.evidence}</small></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="decision-model-grid" aria-label="Screening decision-right models">
+                <article className="panel decision-model-card">
+                  <div className="evidence-route-heading"><span className="feature-mark">A</span><div><p className="eyebrow">Governance model</p><h2>ONE-owned acceptance</h2></div><EvidenceBadge label="Legal decision" /></div>
+                  <p>ONE sets the checkout policy and decides whether a payment may proceed.</p>
+                  <ul><li>ONE must own the policy administration, thresholds, exceptions and decision log.</li><li>This may make ONE a functional gatekeeper even when ONE never possesses or signs for funds.</li><li>Legal must assess the complete checkout, routing and later-service arrangement.</li></ul>
+                </article>
+                <article className="panel decision-model-card">
+                  <div className="evidence-route-heading"><span className="feature-mark">B</span><div><p className="eyebrow">Governance model</p><h2>Merchant-owned acceptance</h2></div><EvidenceBadge label="Proposed" /></div>
+                  <p>The merchant receives the risk signal and owns the customer acceptance decision.</p>
+                  <ul><li>The merchant controls its policy, exceptions and audit record.</li><li>ONE retains a non-overridable refusal only at ONE’s own service boundary.</li><li>Contracts, permissions and interface behavior must evidence the same allocation.</li></ul>
+                </article>
+              </section>
+
+              <section className="panel service-access-boundary">
+                <div className="panel-heading">
+                  <div><p className="eyebrow">Merchant election · ONE service boundary</p><h2>Screening choice changes service access—not ownership of the merchant wallet.</h2></div>
+                  <EvidenceBadge label="Proposed" />
+                </div>
+                <div className="service-tier-grid">
+                  <article>
+                    <div><span className="feature-mark">✓</span><h3>Gateway services · screening required</h3></div>
+                    <p>The merchant elects the screened Gateway tier and accepts the applicable policy and data terms.</p>
+                    <ul><li>Eligible to request ONE payment intents, approved routing, conversion, settlement, reconciliation, payouts and off-ramp services, subject to transaction-specific screening and all other approvals.</li><li>ONE controls access to ONE services; the merchant continues to control its wallet keys and assets.</li><li>The tier election and policy version are logged separately from each transaction’s screening decision and service entitlement.</li></ul>
+                  </article>
+                  <article>
+                    <div><span className="feature-mark">—</span><h3>Self-custody checkout only</h3></div>
+                    <p>The unscreened path is limited to a direct payer-to-merchant wallet transfer.</p>
+                    <ul><li>No ONE/Dynamic route, generated deposit address, conversion, platform balance, settlement, payout, off-ramp or ONE reconciliation is available.</li><li>ONE disables its own service entitlements; it does not freeze, redirect or move assets in the merchant-controlled wallet.</li><li>Separate receiving context or transaction-level provenance prevents commingling from bypassing review; a later tier change does not make an unscreened balance eligible.</li></ul>
+                  </article>
+                </div>
+                <div className="mandatory-control-note"><strong>No waiver of mandatory controls</strong><p>The election applies only where checkout screening is a product condition rather than a legal requirement. It cannot waive screening or restrictions that ONE or another provider must perform by law, regulation or contract.</p></div>
+              </section>
+
+              <section className="evidence-route-grid">
+                <article className="panel evidence-route-card evidence-route-testnet">
+                  <div className="evidence-route-heading"><span className="feature-mark">T</span><div><p className="eyebrow">Runnable proof</p><h2>Base Sepolia payer-signature harness</h2></div><EvidenceBadge label={testTransactionReceipt?.status === "0x1" ? "Test-demonstrated" : "Unconfirmed"} /></div>
+                  <p><strong>Runtime payer wallet → runtime merchant address · native test ETH on Base Sepolia.</strong></p>
+                  <ul><li>Can prove the payer’s injected wallet submitted a transaction.</li><li>Can prove successful public-testnet funds movement when a receipt reports success.</li><li>Does not use Dynamic or prove conversion, screening, deposit-address custody or USDC settlement.</li></ul>
+                </article>
+                <article className="panel evidence-route-card">
+                  <div className="evidence-route-heading"><span className="feature-mark">D</span><div><p className="eyebrow">Separate evidence track</p><h2>Dynamic Flow · Base mainnet ETH → USDC</h2></div><EvidenceBadge label="Dynamic-provided" /></div>
+                  <p><strong>Payer ETH → Flow-generated deposit address → external execution → merchant-controlled Base USDC destination.</strong></p>
+                  <ul><li>Quote-only preparation; mainnet execution has not been run.</li><li>No generated address, controller, executor, screening decision, refund authority or settlement hash is represented as proven.</li><li>Any mainnet transaction requires a separate, explicit authorization outside this harness.</li></ul>
+                  <div className="quote-only-strip"><StatusBadge label="Quote-only" tone="blue" /><span>Mainnet execution not run</span></div>
+                </article>
+              </section>
+
+              <section className="panel test-harness-panel">
+                <div className="panel-heading">
+                  <div><h2>Injected-wallet Base Sepolia harness</h2><p>No key, secret or destination is embedded. The browser wallet displays the final approval.</p></div>
+                  <StatusBadge label={testHarnessPhase === "confirmed" ? "Receipt observed" : testChainReady ? "Base Sepolia ready" : testPayerAddress ? "Wallet connected" : "Wallet not connected"} tone={testHarnessPhase === "confirmed" ? "green" : testChainReady ? "blue" : "gray"} />
+                </div>
+                <div className="testnet-scope-note">
+                  <strong>What this proves—and no more</strong>
+                  <p>A successful receipt proves payer authorization and native test-ETH movement to the runtime destination on chain ID {BASE_SEPOLIA_CHAIN_ID}. It does not prove Dynamic Flow conversion, screening, generated-address custody, refunds or ETH→USDC merchant settlement.</p>
+                </div>
+
+                <div className="test-harness-layout">
+                  <form className="test-harness-form" onSubmit={(event) => { event.preventDefault(); void sendBaseSepoliaTransaction(); }}>
+                    <label>
+                      <span>Merchant-controlled Base Sepolia address</span>
+                      <input autoComplete="off" onChange={(event) => setTestMerchantAddress(event.target.value)} placeholder="Paste a testnet address at runtime" spellCheck={false} value={testMerchantAddress} />
+                      <small>No address is stored in source or sent anywhere before the wallet request.</small>
+                    </label>
+                    <label>
+                      <span>Native test ETH amount</span>
+                      <input autoComplete="off" inputMode="decimal" onChange={(event) => setTestEthAmount(event.target.value)} placeholder="0.0001" value={testEthAmount} />
+                      <small>Use test ETH only. The value is converted to wei locally.</small>
+                    </label>
+
+                    <div className="test-harness-actions">
+                      <button className="button button-secondary" disabled={testHarnessPhase === "connecting"} onClick={() => void connectTestWallet()} type="button">{testPayerAddress ? "Reconnect wallet" : "1 · Connect wallet"}</button>
+                      <button className="button button-secondary" disabled={!testPayerAddress || testHarnessPhase === "switching"} onClick={() => void switchToBaseSepolia()} type="button">2 · Switch / add Base Sepolia</button>
+                      <button className="button button-primary" disabled={!testPayerAddress || !testChainReady || testHarnessPhase === "awaiting-signature" || testHarnessPhase === "submitted"} type="submit">3 · Review and send test ETH</button>
+                    </div>
+                    <p className="wallet-action-warning"><strong>No auto-send.</strong> Only the third button calls <code>eth_sendTransaction</code>, after the runtime fields and chain are validated. The injected wallet can still reject the request.</p>
+                    <div className={`harness-message harness-message-${testHarnessError ? "error" : testHarnessPhase}`} aria-live="polite"><strong>{testHarnessError ? (testTransactionHash ? "Receipt check issue" : "Request not completed") : "Harness status"}</strong><span>{testHarnessError || testHarnessMessage}</span></div>
+                    <div className="testnet-links"><a href="https://docs.base.org/get-started/get-funds" rel="noreferrer" target="_blank">Base Sepolia test-funds guidance</a><a href={BASE_SEPOLIA_EXPLORER_URL} rel="noreferrer" target="_blank">Open Base Sepolia explorer</a></div>
+                  </form>
+
+                  <aside className="test-proof-record">
+                    <div className="test-proof-heading"><div><p className="eyebrow">Evidence record</p><h3>{testPaymentIntentId}</h3></div><EvidenceBadge label={testTransactionReceipt?.status === "0x1" ? "Test-demonstrated" : "Proposed"} /></div>
+                    <dl>
+                      <div><dt>Payment-intent ID</dt><dd><code>{testPaymentIntentId}</code><small>Generated locally; not yet a production provider linkage</small></dd></div>
+                      <div><dt>Payer address</dt><dd><code>{testPayerAddress || "Not connected"}</code></dd></div>
+                      <div><dt>Merchant destination</dt><dd><code>{testMerchantAddress.trim() || "Runtime input required"}</code></dd></div>
+                      <div><dt>Value</dt><dd>{testEthAmount.trim() ? `${testEthAmount.trim()} test ETH` : "Runtime input required"}</dd></div>
+                      <div><dt>Chain ID</dt><dd>{testChainId ? `${Number.parseInt(testChainId, 16)} · ${testChainId}` : `${BASE_SEPOLIA_CHAIN_ID} expected`}</dd></div>
+                      <div><dt>Transaction hash</dt><dd><code>{testTransactionHash || "Not submitted"}</code>{testTransactionHash ? <a href={`${BASE_SEPOLIA_EXPLORER_URL}/tx/${testTransactionHash}`} rel="noreferrer" target="_blank">View on BaseScan</a> : null}</dd></div>
+                      <div><dt>Receipt status</dt><dd>{testTransactionReceipt ? (testTransactionReceipt.status === "0x1" ? "Success" : "Failed") : "Pending"}</dd></div>
+                      <div><dt>Receipt block</dt><dd>{displayBlockNumber(testTransactionReceipt?.blockNumber)}</dd></div>
+                      <div><dt>Gas used</dt><dd><code>{testTransactionReceipt?.gasUsed ?? "Pending"}</code></dd></div>
+                    </dl>
+                    {testTransactionHash ? <button className="button button-secondary button-full" onClick={() => void refreshTestReceipt()} type="button">Check receipt</button> : null}
+                    <div className="proof-linkage-note"><strong>Original-intent linkage boundary</strong><p>This screen groups the local intent and testnet receipt for discussion. Production linkage still requires persisted Dynamic IDs, generated address, quote, webhook and any refund record.</p></div>
+                  </aside>
+                </div>
+              </section>
             </>
           ) : null}
 
