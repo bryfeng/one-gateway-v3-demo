@@ -88,6 +88,8 @@ test("public Dynamic integration contains no server credential", () => {
   assert.doesNotMatch(publicDynamicSource, /DYNAMIC_API_(?:KEY|TOKEN)/);
   assert.match(dynamicFlowSource, /Presenter access/);
   assert.match(dynamicFlowSource, /Meeting-only key/);
+  assert.match(dynamicFlowSource, /accessKey\.length > 0/);
+  assert.doesNotMatch(dynamicFlowSource, /accessKey\.length >= 8/);
 });
 
 test("Dynamic Flow test harness preserves the real risk and settlement boundaries", () => {

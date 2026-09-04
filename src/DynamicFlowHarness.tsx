@@ -219,7 +219,7 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
     && normalizedSettlementDestination
     && payerDiffersFromDestination
     && !settlementDestinationError
-    && accessKey.length >= 8
+    && accessKey.length > 0
     && !flowId
     && !pending,
   );
