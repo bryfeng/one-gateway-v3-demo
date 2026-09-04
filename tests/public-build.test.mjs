@@ -100,7 +100,8 @@ test("public Dynamic integration contains no server credential", () => {
   assert.doesNotMatch(publicDynamicSource, /Authorization\s*:\s*["'`]Bearer/i);
   assert.doesNotMatch(publicDynamicSource, /dyn_[A-Za-z0-9_-]{8,}/);
   assert.doesNotMatch(publicDynamicSource, /DYNAMIC_API_(?:KEY|TOKEN)/);
-  assert.match(appSource, /scoped server token has not been created or deployed/);
+  assert.match(appSource, /scoped server token is deployed only as an encrypted, meeting-gated Worker secret/);
+  assert.match(appSource, /Deployment alone did not create a Flow or execute a transaction/);
   assert.match(appSource, /Flow and Base Sepolia are enabled/);
 });
 

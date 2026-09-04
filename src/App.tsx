@@ -1850,8 +1850,8 @@ export default function Home() {
                 <article className="panel evidence-route-card">
                   <div className="evidence-route-heading"><span className="feature-mark">D</span><div><p className="eyebrow">Credentialed test track</p><h2>Dynamic Flow · Base Sepolia USDC → USDC</h2></div><EvidenceBadge label="Unconfirmed" /></div>
                   <p><strong>Payer-controlled wallet → Dynamic-prepared transaction and screening → merchant-controlled Base Sepolia USDC destination.</strong></p>
-                  <ul><li>Flow entitlement is enabled for this Dynamic environment; the scoped server token has not been created or deployed.</li><li>The wallet-source route does not inherently use a Flow-generated deposit address. That is a separate source mode and custody question.</li><li>The test route is same-token and same-network because Dynamic testnets do not support Flow swaps or bridges.</li><li>Completion requires a Dynamic Flow ID, cleared risk state, source hash, final settlement state and merchant-destination receipt.</li></ul>
-                  <div className="quote-only-strip"><StatusBadge label="Flow enabled" tone="green" /><span>Base Sepolia enabled · private backend pending</span></div>
+                  <ul><li>Flow entitlement is enabled for this Dynamic environment; the scoped server token is deployed only as an encrypted, meeting-gated Worker secret.</li><li>The wallet-source route does not inherently use a Flow-generated deposit address. That is a separate source mode and custody question.</li><li>The test route is same-token and same-network because Dynamic testnets do not support Flow swaps or bridges.</li><li>Completion requires a Dynamic Flow ID, cleared risk state, source hash, final settlement state and merchant-destination receipt.</li></ul>
+                  <div className="quote-only-strip"><StatusBadge label="Flow enabled" tone="green" /><span>Base Sepolia enabled · meeting-gated backend ready</span></div>
                 </article>
               </section>
 
@@ -1862,7 +1862,7 @@ export default function Home() {
                   <div><span className="feature-mark">2</span><p><strong>Dynamic attaches and screens the payer</strong><small>A scoped one-Flow capability drives quote, prepare and broadcast; a blocked or review result stops the Gateway path.</small></p></div>
                   <div><span className="feature-mark">3</span><p><strong>Payer signs; Dynamic tracks settlement</strong><small>The payer wallet controls approval. Source and settlement hashes remain distinct evidence fields until final completion.</small></p></div>
                 </div>
-                <div className="mandatory-control-note"><strong>Current environment boundary</strong><p>Flow and Base Sepolia are enabled and <code>flow.write</code> is available, but no scoped token exists yet. Enabling the network or orchestrating checkout does not place ONE in custody; key control, destination ownership, contracts, transaction construction, refund authority and settlement evidence still determine the operational and legal analysis.</p></div>
+                <div className="mandatory-control-note"><strong>Current environment boundary</strong><p>Flow and Base Sepolia are enabled, and the <code>flow.write</code> token is held only as an encrypted Worker secret behind the meeting access key. Deployment alone did not create a Flow or execute a transaction. Enabling the network or orchestrating checkout does not place ONE in custody; key control, destination ownership, contracts, transaction construction, refund authority and settlement evidence still determine the operational and legal analysis.</p></div>
                 <DynamicFlowHarness verifiedWallet={flowVerifiedWallet} />
               </section>
 
