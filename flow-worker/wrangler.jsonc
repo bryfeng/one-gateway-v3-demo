@@ -11,8 +11,7 @@
   "secrets": {
     "required": [
       "DYNAMIC_API_TOKEN",
-      "ONE_DEMO_ACCESS_KEY",
-      "MERCHANT_BASE_SEPOLIA_ADDRESS"
+      "ONE_DEMO_ACCESS_KEY"
     ]
   },
   "observability": {

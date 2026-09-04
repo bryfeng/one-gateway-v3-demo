@@ -132,8 +132,8 @@ export function DynamicWalletConnection({ compact = false, onClear, onVerified, 
     <section className={`dynamic-wallet-connection ${compact ? "dynamic-wallet-connection-compact" : ""}`} aria-label="Dynamic external wallet connection">
       <div className="dynamic-wallet-heading">
         <div>
-          <p className="eyebrow">Live Dynamic client · external EVM wallets</p>
-          <h3>{compact ? "Connect and prove wallet control" : "Dynamic wallet-authentication evidence"}</h3>
+          <p className="eyebrow">{compact ? "Payer" : "Live Dynamic client · external EVM wallets"}</p>
+          <h3>{compact ? "Connect payer wallet" : "Dynamic wallet-authentication evidence"}</h3>
         </div>
         <span className={`dynamic-runtime-status dynamic-runtime-status-${initStatus === "finished" ? "ready" : initStatus === "failed" ? "blocked" : "pending"}`}>{statusLabel}</span>
       </div>
@@ -174,7 +174,7 @@ export function DynamicWalletConnection({ compact = false, onClear, onVerified, 
             {providers.map((provider) => (
               <button disabled={pending} key={provider.key} onClick={() => void connect(provider.key, provider.metadata.displayName)} type="button">
                 <img alt="" src={provider.metadata.icon} />
-                <span><strong>{provider.metadata.displayName}</strong><small>{activeProviderKey === provider.key ? "Check your wallet…" : "Connect + sign ownership proof"}</small></span>
+                <span><strong>{provider.metadata.displayName}</strong><small>{activeProviderKey === provider.key ? "Check your wallet…" : compact ? "Connect + verify" : "Connect + sign ownership proof"}</small></span>
                 <b>→</b>
               </button>
             ))}
@@ -185,7 +185,7 @@ export function DynamicWalletConnection({ compact = false, onClear, onVerified, 
       ) : null}
 
       {missingFields.length ? <div className="dynamic-onboarding-note"><strong>Sandbox onboarding remains separate</strong><span>Dynamic currently reports required profile fields: {missingFields.join(", ")}. Wallet ownership evidence does not, by itself, complete that onboarding.</span></div> : null}
-      <p className="dynamic-scope-note"><strong>Scope:</strong> this action contacts Dynamic and requests a fresh wallet ownership signature. For a restored session, the new challenge is also verified locally against the selected EVM address; the stored credential alone cannot unlock checkout. It does not create a Flow, request a quote, call <code>eth_sendTransaction</code>, or move funds.</p>
+      {!compact ? <p className="dynamic-scope-note"><strong>Scope:</strong> this action contacts Dynamic and requests a fresh wallet ownership signature. For a restored session, the new challenge is also verified locally against the selected EVM address; the stored credential alone cannot unlock checkout. It does not create a Flow, request a quote, call <code>eth_sendTransaction</code>, or move funds.</p> : null}
     </section>
   );
 }

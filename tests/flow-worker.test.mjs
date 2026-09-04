@@ -8,7 +8,6 @@ const env = {
   DYNAMIC_ENVIRONMENT_ID: "3608a494-ff5c-4cbc-a425-ddc382e4a90a",
   DYNAMIC_API_TOKEN: "test-token-not-a-real-dynamic-credential",
   ONE_DEMO_ACCESS_KEY: "meeting-only-key",
-  MERCHANT_BASE_SEPOLIA_ADDRESS: merchantAddress,
   ALLOWED_ORIGINS: `${allowedOrigin},http://localhost:5173`,
 };
 
@@ -48,18 +47,21 @@ test("health reports only readiness and the fixed public test route", async () =
   assert.equal(response.headers.get("Access-Control-Allow-Origin"), allowedOrigin);
 });
 
-test("the zero-address placeholder never reports ready or creates a Flow", async () => {
-  const unsafeEnv = { ...env, MERCHANT_BASE_SEPOLIA_ADDRESS: "0x0000000000000000000000000000000000000000" };
-  const healthResponse = await worker.fetch(request("/health"), unsafeEnv, {});
+test("missing private credentials never report ready or create a Flow", async () => {
+  const incompleteEnv = { ...env, DYNAMIC_API_TOKEN: "" };
+  const healthResponse = await worker.fetch(request("/health"), incompleteEnv, {});
   assert.equal(healthResponse.status, 200);
   assert.equal((await healthResponse.json()).ready, false);
 
-  const createResponse = await worker.fetch(createRequest({ paymentIntentId: "ONE-BS-ABCD1234" }), unsafeEnv, {});
+  const createResponse = await worker.fetch(createRequest({
+    paymentIntentId: "ONE-BS-ABCD1234",
+    settlementDestination: merchantAddress,
+  }), incompleteEnv, {});
   assert.equal(createResponse.status, 503);
   assert.match((await createResponse.json()).error, /not configured/);
 });
 
-test("create accepts only the payment-intent linkage", async () => {
+test("create accepts a payment-intent linkage and validated settlement destination", async () => {
   let capturedUrl = "";
   let capturedInit;
   const originalFetch = globalThis.fetch;
@@ -72,6 +74,7 @@ test("create accepts only the payment-intent linkage", async () => {
   try {
     const response = await worker.fetch(createRequest({
       paymentIntentId: "ONE-BS-ABCD1234",
+      settlementDestination: merchantAddress,
     }), env, {});
     assert.equal(response.status, 201);
     assert.deepEqual(await response.json(), { flowId: "flow_test_123" });
@@ -99,13 +102,29 @@ test("create accepts only the payment-intent linkage", async () => {
   assert.equal("payerAddress" in dynamicBody.memo, false);
 });
 
-test("the public caller cannot choose destination, chain, token or amount", async () => {
+test("the public caller cannot choose chain, token or amount", async () => {
   const response = await worker.fetch(createRequest({
     paymentIntentId: "ONE-BS-ABCD1234",
-    destination: merchantAddress,
+    settlementDestination: merchantAddress,
+    amount: "1000.00",
   }), env, {});
   assert.equal(response.status, 400);
-  assert.match((await response.json()).error, /Only paymentIntentId/);
+  assert.match((await response.json()).error, /Only paymentIntentId and settlementDestination/);
+});
+
+test("settlement destination rejects missing, malformed, zero and token-contract addresses", async () => {
+  for (const settlementDestination of [
+    undefined,
+    "not-an-address",
+    "0x0000000000000000000000000000000000000000",
+    "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  ]) {
+    const body = { paymentIntentId: "ONE-BS-ABCD1234" };
+    if (settlementDestination !== undefined) body.settlementDestination = settlementDestination;
+    const response = await worker.fetch(createRequest(body), env, {});
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).error, /Settlement destination/);
+  }
 });
 
 test("the create endpoint requires both the allowed origin and meeting key", async () => {
@@ -116,13 +135,13 @@ test("the create endpoint requires both the allowed origin and meeting key", asy
       "Content-Type": "application/json",
       "X-One-Demo-Key": env.ONE_DEMO_ACCESS_KEY,
     },
-    body: JSON.stringify({ paymentIntentId: "ONE-BS-ABCD1234" }),
+    body: JSON.stringify({ paymentIntentId: "ONE-BS-ABCD1234", settlementDestination: merchantAddress }),
   });
   const originResponse = await worker.fetch(wrongOrigin, env, {});
   assert.equal(originResponse.status, 403);
 
   const keyResponse = await worker.fetch(createRequest(
-    { paymentIntentId: "ONE-BS-ABCD1234" },
+    { paymentIntentId: "ONE-BS-ABCD1234", settlementDestination: merchantAddress },
     { headers: { "X-One-Demo-Key": "wrong-key" } },
   ), env, {});
   assert.equal(keyResponse.status, 401);
@@ -135,6 +154,7 @@ test("upstream failures are redacted from the browser response", async () => {
   try {
     response = await worker.fetch(createRequest({
       paymentIntentId: "ONE-BS-ABCD1234",
+      settlementDestination: merchantAddress,
     }), env, {});
   } finally {
     globalThis.fetch = originalFetch;

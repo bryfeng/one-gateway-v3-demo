@@ -1,6 +1,8 @@
 // @ts-check
 /// <reference path="../worker-configuration.d.ts" />
 
+import { getAddress, isAddress } from "viem";
+
 const BASE_SEPOLIA_CHAIN_ID = "84532";
 const BASE_SEPOLIA_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 const FLOW_AMOUNT_USD = "1.00";
@@ -76,9 +78,20 @@ function json(body, status, origin) {
  */
 function missingConfiguration(env) {
   return !env.DYNAMIC_API_TOKEN
-    || !env.ONE_DEMO_ACCESS_KEY
-    || !EVM_ADDRESS.test(env.MERCHANT_BASE_SEPOLIA_ADDRESS)
-    || env.MERCHANT_BASE_SEPOLIA_ADDRESS.toLowerCase() === ZERO_ADDRESS;
+    || !env.ONE_DEMO_ACCESS_KEY;
+}
+
+/**
+ * @param {unknown} value
+ */
+function normalizeSettlementDestination(value) {
+  if (typeof value !== "string") return "";
+  const candidate = value.trim();
+  if (!EVM_ADDRESS.test(candidate) || !isAddress(candidate)) return "";
+  const normalized = getAddress(candidate);
+  const normalizedLower = normalized.toLowerCase();
+  if (normalizedLower === ZERO_ADDRESS || normalizedLower === BASE_SEPOLIA_USDC.toLowerCase()) return "";
+  return normalized;
 }
 
 /**
@@ -129,11 +142,16 @@ async function handleRequest(request, env, upstreamFetch = fetch) {
     return json({ error: "Request body must be valid JSON." }, 400, origin);
   }
   if (!isRecord(body)) return json({ error: "Request body must be an object." }, 400, origin);
-  const unknownKeys = Object.keys(body).filter((key) => key !== "paymentIntentId");
-  if (unknownKeys.length) return json({ error: "Only paymentIntentId is accepted." }, 400, origin);
+  const allowedKeys = new Set(["paymentIntentId", "settlementDestination"]);
+  const unknownKeys = Object.keys(body).filter((key) => !allowedKeys.has(key));
+  if (unknownKeys.length) return json({ error: "Only paymentIntentId and settlementDestination are accepted." }, 400, origin);
 
   const paymentIntentId = typeof body.paymentIntentId === "string" ? body.paymentIntentId : "";
   if (!PAYMENT_INTENT_ID.test(paymentIntentId)) return json({ error: "Payment intent ID is not valid." }, 400, origin);
+  const settlementDestination = normalizeSettlementDestination(body.settlementDestination);
+  if (!settlementDestination) {
+    return json({ error: "Settlement destination must be a valid, non-zero EVM address and cannot be the USDC contract." }, 400, origin);
+  }
 
   const requestId = crypto.randomUUID();
   const dynamicBody = {
@@ -156,7 +174,7 @@ async function handleRequest(request, env, upstreamFetch = fetch) {
       destinations: [{
         chainName: "EVM",
         type: "address",
-        identifier: env.MERCHANT_BASE_SEPOLIA_ADDRESS,
+        identifier: settlementDestination,
       }],
     },
     memo: {

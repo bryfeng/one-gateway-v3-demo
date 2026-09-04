@@ -9,6 +9,10 @@ const dynamicFlowSource = await readFile(new URL("../src/DynamicFlowHarness.tsx"
 const flowWorkerSource = await readFile(new URL("../flow-worker/src/index.js", import.meta.url), "utf8");
 const mainSource = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
 const builtHtml = await readFile(new URL("../dist/index.html", import.meta.url), "utf8");
+const controlsViewSource = appSource.slice(
+  appSource.indexOf('{view === "controls"'),
+  appSource.indexOf('{view === "developer"'),
+);
 
 test("build produces a static entry point for GitHub Pages", () => {
   assert.match(builtHtml, /ONE Gateway V3/);
@@ -24,42 +28,24 @@ test("public prototype retains the key merchant journeys", () => {
     "Exchange",
     "Reporting",
     "Smart Account",
-    "Controls & evidence",
+    "Flow demo",
   ]) {
     assert.match(appSource, new RegExp(label));
   }
 });
 
-test("controls view separates custody evidence and requires explicit Base Sepolia wallet actions", () => {
+test("Flow demo stays focused on the live Fireblocks Flow path", () => {
   for (const label of [
-    "Ownership and control matrix",
-    "Payer wallet",
-    "Optional deposit-address source",
-    "External execution",
-    "Merchant destination",
-    "ONE policy / refusal boundary",
-    "ONE-owned acceptance",
-    "Merchant-owned acceptance",
-    "Downstream ONE access",
-    "Gateway services · screening required",
-    "Self-custody checkout only",
-    "a later tier change does not make an unscreened balance eligible",
-    "No waiver of mandatory controls",
-    "Refund control",
-    "Original payment-intent linkage",
-    "Test-demonstrated",
-    "Dynamic-provided",
-    "Legal decision",
-    "wallet_switchEthereumChain",
-    "wallet_addEthereumChain",
-    "eth_sendTransaction",
-    "eth_getTransactionReceipt",
-    "No auto-send",
-    "Flow enabled · testnet run pending",
+    "Fireblocks Flow",
+    "Create a 1.00 test-USDC payment on Base Sepolia through Dynamic",
+    "DynamicWalletConnection compact",
+    "DynamicFlowHarness",
   ]) {
-    assert.match(appSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(controlsViewSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(appSource, /84532/);
+  for (const removedLabel of ["Ownership and control matrix", "ONE-owned acceptance", "Injected-wallet Base Sepolia harness"]) {
+    assert.doesNotMatch(controlsViewSource, new RegExp(removedLabel));
+  }
 });
 
 test("Dynamic uses the supplied environment and external injected wallets only", () => {
@@ -100,9 +86,8 @@ test("public Dynamic integration contains no server credential", () => {
   assert.doesNotMatch(publicDynamicSource, /Authorization\s*:\s*["'`]Bearer/i);
   assert.doesNotMatch(publicDynamicSource, /dyn_[A-Za-z0-9_-]{8,}/);
   assert.doesNotMatch(publicDynamicSource, /DYNAMIC_API_(?:KEY|TOKEN)/);
-  assert.match(appSource, /scoped server token is deployed only as an encrypted, meeting-gated Worker secret/);
-  assert.match(appSource, /Deployment alone did not create a Flow or execute a transaction/);
-  assert.match(appSource, /Flow and Base Sepolia are enabled/);
+  assert.match(dynamicFlowSource, /Presenter access/);
+  assert.match(dynamicFlowSource, /Meeting-only key/);
 });
 
 test("Dynamic Flow test harness preserves the real risk and settlement boundaries", () => {
@@ -112,16 +97,20 @@ test("Dynamic Flow test harness preserves the real risk and settlement boundarie
     "useAttachFlowSource",
     "useGetFlowQuote",
     "useSubmitFlowTransaction",
-    "Dynamic Flow · 1.00 test USDC to a fixed merchant destination",
-    "Attach + screen",
+    "Fireblocks Flow via Dynamic",
+    "Settlement destination",
+    "Start Fireblocks Flow",
+    "Attach wallet + screen",
     "Get quote",
-    "Review + submit",
+    "Review & pay in wallet",
     "Recover quote",
-    "A blocked or review result stops this ONE Gateway attempt before funds move",
+    "Settlement destination mismatch",
+    "readFlowSettlementDestination",
+    "payerDiffersFromDestination",
     "source_confirmed",
     "settlementState === \"completed\"",
-    "Dynamic does not supply or own this wallet",
-    "The wallet-source route does not inherently use a Flow-generated deposit address",
+    "Source confirmation is not final settlement",
+    "Delivery to an address does not, by itself, prove ownership",
   ]) {
     const combined = `${dynamicFlowSource}\n${appSource}`;
     assert.match(combined, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -140,18 +129,25 @@ test("Dynamic Flow test harness preserves the real risk and settlement boundarie
   assert.match(dynamicFlowSource, /canClearUnreadableAttempt/);
   assert.doesNotMatch(dynamicFlowSource, /sessionToken/);
   assert.doesNotMatch(dynamicFlowSource, /console\.(?:log|error|warn)/);
+  assert.doesNotMatch(dynamicFlowSource, /!flow\?\.toAddress \|\|/);
+  assert.match(dynamicFlowSource, /flowSettlementDestination\s*&&\s*flowSettlementDestination\.toLowerCase\(\) === normalizedSettlementDestination\.toLowerCase\(\)/);
+  assert.match(dynamicFlowSource, /async function attachAndScreen\(\)[\s\S]*?!payerDiffersFromDestination/);
+  assert.match(dynamicFlowSource, /async function requestQuote\(\)[\s\S]*?!payerDiffersFromDestination[\s\S]*?!destinationMatchesFlow/);
+  assert.match(dynamicFlowSource, /async function submitFlow\(\)[\s\S]*?!payerDiffersFromDestination[\s\S]*?!destinationMatchesFlow/);
 });
 
 test("the Flow-create worker is narrow and fixes all value-moving configuration", () => {
   assert.match(flowWorkerSource, /Authorization: `Bearer \$\{env\.DYNAMIC_API_TOKEN\}`/);
   assert.match(flowWorkerSource, /ONE_DEMO_ACCESS_KEY/);
-  assert.match(flowWorkerSource, /MERCHANT_BASE_SEPOLIA_ADDRESS/);
+  assert.doesNotMatch(flowWorkerSource, /MERCHANT_BASE_SEPOLIA_ADDRESS/);
   assert.match(flowWorkerSource, /FLOW_AMOUNT_USD/);
   assert.match(flowWorkerSource, /ZERO_ADDRESS/);
+  assert.match(flowWorkerSource, /normalizeSettlementDestination/);
+  assert.match(flowWorkerSource, /identifier: settlementDestination/);
   assert.match(flowWorkerSource, /tokenDecimals: 6/);
   assert.match(flowWorkerSource, /disableSwaps: true/);
   assert.match(flowWorkerSource, /pegStablecoins: true/);
-  assert.match(flowWorkerSource, /Only paymentIntentId is accepted/);
+  assert.match(flowWorkerSource, /Only paymentIntentId and settlementDestination are accepted/);
   assert.doesNotMatch(flowWorkerSource, /body\.payerAddress|payerAddress,/);
   assert.doesNotMatch(flowWorkerSource, /dyn_[A-Za-z0-9_-]{8,}/);
 });
@@ -162,38 +158,6 @@ test("the Controls deep link targets the Dynamic Flow harness", () => {
   assert.match(dynamicFlowSource, /id="dynamic-flow-demo"/);
 });
 
-test("testnet evidence is frozen and duplicate sends are guarded", () => {
-  for (const label of [
-    "SubmittedTestEvidence",
-    "submittedTestEvidence",
-    "displayedTestEvidence",
-    "testRequestPending",
-    "Boolean(testTransactionHash)",
-    "Generate a new test intent before requesting another transfer.",
-    "Frozen when the wallet transaction was requested",
-    "no production payment, embedded wallet or banking rail is connected",
-    "Two separately labelled Base Sepolia proof tracks",
-  ]) {
-    assert.match(appSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  }
-  assert.match(appSource, /disabled=\{testRequestPending\}[^>]*>Generate new test intent/);
-
-  const sendFunction = appSource.slice(
-    appSource.indexOf("async function sendBaseSepoliaTransaction"),
-    appSource.indexOf("function acceptCheckoutPayment"),
-  );
-  assert.ok(sendFunction.indexOf("setSubmittedTestEvidence({") < sendFunction.indexOf('method: "eth_sendTransaction"'));
-  assert.match(sendFunction, /if \(testRequestPending\) return;/);
-  assert.match(sendFunction, /if \(testTransactionHash\)/);
-
-  const resetFunction = appSource.slice(
-    appSource.indexOf("function generateNewTestIntent"),
-    appSource.indexOf("async function sendBaseSepoliaTransaction"),
-  );
-  assert.match(resetFunction, /setSubmittedTestEvidence\(null\)/);
-  assert.match(appSource, /const displayedTestEvidence = testTransactionHash\s*\? submittedTestEvidence\s*:/);
-  assert.match(appSource, /<h3>\{displayedTestEvidence\?\.paymentIntentId/);
-});
 
 test("account and wallet detail journeys remain present", () => {
   for (const label of [

@@ -409,7 +409,7 @@ const navGroups: Array<{ label: string; items: Array<{ id: View; label: string; 
   {
     label: "Build",
     items: [
-      { id: "controls", label: "Controls & evidence", mark: "C" },
+      { id: "controls", label: "Flow demo", mark: "F" },
       { id: "developer", label: "Developer", mark: "D" },
     ],
   },
@@ -424,7 +424,7 @@ const viewTitles: Record<View, string> = {
   payouts: "Payouts",
   settlements: "Settlements",
   reporting: "Reporting",
-  controls: "Controls & evidence",
+  controls: "Fireblocks Flow",
   developer: "Developer",
 };
 
@@ -1489,7 +1489,7 @@ export default function Home() {
 
         <div className="service-strip">
           <span className="service-icon">i</span>
-          <p><strong>Illustrative prototype · do not send production funds</strong> · Mock data and target journeys only; no production payment, embedded wallet or banking rail is connected. Two separately labelled Base Sepolia proof tracks can request user-approved public-testnet transfers.</p>
+          <p><strong>Testnet demo only · do not send production funds.</strong> Any transaction requires approval in the payer wallet.</p>
           <button onClick={() => setProfileOpen(true)} type="button">View Day 30 / 60 / 90 scope</button>
         </div>
 
@@ -1769,153 +1769,13 @@ export default function Home() {
 
           {view === "controls" ? (
             <>
-              <PageHeader title="Controls & evidence" description="Meeting view: who owns each control, what the demo proves, and which conclusions still require provider or legal evidence.">
-                <button className="button button-secondary" disabled={testRequestPending} onClick={generateNewTestIntent} type="button">Generate new test intent</button>
+              <PageHeader title="Fireblocks Flow" description="Create a 1.00 test-USDC payment on Base Sepolia through Dynamic.">
+                <StatusBadge label="Testnet only" tone="blue" />
               </PageHeader>
 
-              <section className="controls-boundary-banner panel">
-                <div>
-                  <p className="eyebrow">Evidence before conclusion</p>
-                  <h2>Technology orchestration is shown separately from possession, signing, execution and legal perimeter.</h2>
-                  <p>This view distinguishes testnet facts, Dynamic-provided architecture, proposed controls, unconfirmed points and decisions for counsel. It does not claim that non-custody alone resolves every UK regulatory question.</p>
-                </div>
-                <div className="controls-boundary-badges"><EvidenceBadge label="Proposed" /><EvidenceBadge label="Legal decision" /></div>
-              </section>
-
-              <section className="panel ownership-control-panel">
-                <div className="panel-heading">
-                  <div><h2>Ownership and control matrix</h2><p>Each assertion names its controller, ONE’s actual role and the next evidence needed.</p></div>
-                  <StatusBadge label="Flow enabled · testnet run pending" tone="blue" />
-                </div>
-                <div className="evidence-legend" aria-label="Evidence status legend">
-                  {(["Test-demonstrated", "Dynamic-provided", "Proposed", "Unconfirmed", "Legal decision"] as EvidenceLabel[]).map((label) => <EvidenceBadge key={label} label={label} />)}
-                </div>
-                <div className="table-wrap">
-                  <table className="control-matrix">
-                    <thead><tr><th>Control point</th><th>Asset or action</th><th>Who controls it</th><th>ONE role</th><th>Evidence status</th></tr></thead>
-                    <tbody>
-                      {controlEvidenceRows.map((row) => (
-                        <tr key={row.point}>
-                          <td><strong>{row.point}</strong></td>
-                          <td>{row.control}</td>
-                          <td>{row.controller}</td>
-                          <td>{row.oneRole}</td>
-                          <td><div className="matrix-statuses">{row.statuses.map((status) => <EvidenceBadge key={status} label={status} />)}</div><small>{row.evidence}</small></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section className="decision-model-grid" aria-label="Screening decision-right models">
-                <article className="panel decision-model-card">
-                  <div className="evidence-route-heading"><span className="feature-mark">A</span><div><p className="eyebrow">Governance model</p><h2>ONE-owned acceptance</h2></div><EvidenceBadge label="Legal decision" /></div>
-                  <p>ONE sets the checkout policy and decides whether a payment may proceed.</p>
-                  <ul><li>ONE must own the policy administration, thresholds, exceptions and decision log.</li><li>This may make ONE a functional gatekeeper even when ONE never possesses or signs for funds.</li><li>Legal must assess the complete checkout, routing and later-service arrangement.</li></ul>
-                </article>
-                <article className="panel decision-model-card">
-                  <div className="evidence-route-heading"><span className="feature-mark">B</span><div><p className="eyebrow">Governance model</p><h2>Merchant-owned acceptance</h2></div><EvidenceBadge label="Proposed" /></div>
-                  <p>The merchant receives the risk signal and owns the customer acceptance decision.</p>
-                  <ul><li>The merchant controls its policy, exceptions and audit record.</li><li>ONE retains a non-overridable refusal only at ONE’s own service boundary.</li><li>Contracts, permissions and interface behavior must evidence the same allocation.</li></ul>
-                </article>
-              </section>
-
-              <section className="panel service-access-boundary">
-                <div className="panel-heading">
-                  <div><p className="eyebrow">Merchant election · ONE service boundary</p><h2>Screening choice changes service access—not ownership of the merchant wallet.</h2></div>
-                  <EvidenceBadge label="Proposed" />
-                </div>
-                <div className="service-tier-grid">
-                  <article>
-                    <div><span className="feature-mark">✓</span><h3>Gateway services · screening required</h3></div>
-                    <p>The merchant elects the screened Gateway tier and accepts the applicable policy and data terms.</p>
-                    <ul><li>Eligible to request ONE payment intents, approved routing, conversion, settlement, reconciliation, payouts and off-ramp services, subject to transaction-specific screening and all other approvals.</li><li>ONE controls access to ONE services; the merchant continues to control its wallet keys and assets.</li><li>The tier election and policy version are logged separately from each transaction’s screening decision and service entitlement.</li></ul>
-                  </article>
-                  <article>
-                    <div><span className="feature-mark">—</span><h3>Self-custody checkout only</h3></div>
-                    <p>The unscreened path is limited to a direct payer-to-merchant wallet transfer.</p>
-                    <ul><li>No ONE/Dynamic route, generated deposit address, conversion, platform balance, settlement, payout, off-ramp or ONE reconciliation is available.</li><li>ONE disables its own service entitlements; it does not freeze, redirect or move assets in the merchant-controlled wallet.</li><li>Separate receiving context or transaction-level provenance prevents commingling from bypassing review; a later tier change does not make an unscreened balance eligible.</li></ul>
-                  </article>
-                </div>
-                <div className="mandatory-control-note"><strong>No waiver of mandatory controls</strong><p>The election applies only where checkout screening is a product condition rather than a legal requirement. It cannot waive screening or restrictions that ONE or another provider must perform by law, regulation or contract.</p></div>
-              </section>
-
-              <section className="evidence-route-grid">
-                <article className="panel evidence-route-card evidence-route-testnet">
-                  <div className="evidence-route-heading"><span className="feature-mark">T</span><div><p className="eyebrow">Runnable proof</p><h2>Base Sepolia payer-signature harness</h2></div><EvidenceBadge label={testTransactionReceipt?.status === "0x1" ? "Test-demonstrated" : "Unconfirmed"} /></div>
-                  <p><strong>Runtime payer wallet → runtime merchant address · native test ETH on Base Sepolia.</strong></p>
-                  <ul><li>Can prove the payer’s injected wallet submitted a transaction.</li><li>Can prove successful public-testnet funds movement when a receipt reports success.</li><li>This native-ETH transfer does not use Dynamic or prove conversion, screening, deposit-address custody or USDC settlement.</li></ul>
-                </article>
-                <article className="panel evidence-route-card">
-                  <div className="evidence-route-heading"><span className="feature-mark">D</span><div><p className="eyebrow">Credentialed test track</p><h2>Dynamic Flow · Base Sepolia USDC → USDC</h2></div><EvidenceBadge label="Unconfirmed" /></div>
-                  <p><strong>Payer-controlled wallet → Dynamic-prepared transaction and screening → merchant-controlled Base Sepolia USDC destination.</strong></p>
-                  <ul><li>Flow entitlement is enabled for this Dynamic environment; the scoped server token is deployed only as an encrypted, meeting-gated Worker secret.</li><li>The wallet-source route does not inherently use a Flow-generated deposit address. That is a separate source mode and custody question.</li><li>The test route is same-token and same-network because Dynamic testnets do not support Flow swaps or bridges.</li><li>Completion requires a Dynamic Flow ID, cleared risk state, source hash, final settlement state and merchant-destination receipt.</li></ul>
-                  <div className="quote-only-strip"><StatusBadge label="Flow enabled" tone="green" /><span>Base Sepolia enabled · meeting-gated backend ready</span></div>
-                </article>
-              </section>
-
-              <section className="panel dynamic-evidence-panel">
-                <DynamicWalletConnection onClear={() => setFlowVerifiedWallet(null)} onVerified={setFlowVerifiedWallet} selectedAddress={flowVerifiedWallet?.address} />
-                <div className="dynamic-flow-boundary">
-                  <div><span className="feature-mark">1</span><p><strong>ONE server fixes the payment Flow</strong><small>Amount, Base Sepolia USDC and the merchant-controlled destination cannot be changed by the public client.</small></p></div>
-                  <div><span className="feature-mark">2</span><p><strong>Dynamic attaches and screens the payer</strong><small>A scoped one-Flow capability drives quote, prepare and broadcast; a blocked or review result stops the Gateway path.</small></p></div>
-                  <div><span className="feature-mark">3</span><p><strong>Payer signs; Dynamic tracks settlement</strong><small>The payer wallet controls approval. Source and settlement hashes remain distinct evidence fields until final completion.</small></p></div>
-                </div>
-                <div className="mandatory-control-note"><strong>Current environment boundary</strong><p>Flow and Base Sepolia are enabled, and the <code>flow.write</code> token is held only as an encrypted Worker secret behind the meeting access key. Deployment alone did not create a Flow or execute a transaction. Enabling the network or orchestrating checkout does not place ONE in custody; key control, destination ownership, contracts, transaction construction, refund authority and settlement evidence still determine the operational and legal analysis.</p></div>
+              <section className="flow-demo-page">
+                <DynamicWalletConnection compact onClear={() => setFlowVerifiedWallet(null)} onVerified={setFlowVerifiedWallet} selectedAddress={flowVerifiedWallet?.address} />
                 <DynamicFlowHarness verifiedWallet={flowVerifiedWallet} />
-              </section>
-
-              <section className="panel test-harness-panel">
-                <div className="panel-heading">
-                  <div><h2>Injected-wallet Base Sepolia harness</h2><p>No key, secret or destination is embedded. The browser wallet displays the final approval.</p></div>
-                  <StatusBadge label={testHarnessPhase === "confirmed" ? "Receipt observed" : testChainReady ? "Base Sepolia ready" : testPayerAddress ? "Wallet connected" : "Wallet not connected"} tone={testHarnessPhase === "confirmed" ? "green" : testChainReady ? "blue" : "gray"} />
-                </div>
-                <div className="testnet-scope-note">
-                  <strong>What this proves—and no more</strong>
-                  <p>A successful receipt proves payer authorization and native test-ETH movement to the runtime destination on chain ID {BASE_SEPOLIA_CHAIN_ID}. It does not prove Dynamic Flow conversion, screening, generated-address custody, refunds or ETH→USDC merchant settlement.</p>
-                </div>
-
-                <div className="test-harness-layout">
-                  <form className="test-harness-form" onSubmit={(event) => { event.preventDefault(); void sendBaseSepoliaTransaction(); }}>
-                    <label>
-                      <span>Merchant-controlled Base Sepolia address</span>
-                      <input autoComplete="off" onChange={(event) => setTestMerchantAddress(event.target.value)} placeholder="Paste a testnet address at runtime" spellCheck={false} value={testMerchantAddress} />
-                      <small>No address is stored in source or sent anywhere before the wallet request.</small>
-                    </label>
-                    <label>
-                      <span>Native test ETH amount</span>
-                      <input autoComplete="off" inputMode="decimal" onChange={(event) => setTestEthAmount(event.target.value)} placeholder="0.0001" value={testEthAmount} />
-                      <small>Use test ETH only. The value is converted to wei locally.</small>
-                    </label>
-
-                    <div className="test-harness-actions">
-                      <button className="button button-secondary" disabled={testHarnessPhase === "connecting" || testRequestPending} onClick={() => void connectTestWallet()} type="button">{testPayerAddress ? "Reconnect wallet" : "1 · Connect wallet"}</button>
-                      <button className="button button-secondary" disabled={!testPayerAddress || testHarnessPhase === "switching" || testRequestPending} onClick={() => void switchToBaseSepolia()} type="button">2 · Switch / add Base Sepolia</button>
-                      <button className="button button-primary" disabled={!testPayerAddress || !testChainReady || Boolean(testTransactionHash) || testRequestPending} type="submit">3 · Review and send test ETH</button>
-                    </div>
-                    <p className="wallet-action-warning"><strong>No auto-send.</strong> Only the third button calls <code>eth_sendTransaction</code>, after the runtime fields and chain are validated. The injected wallet can still reject the request.</p>
-                    <div className={`harness-message harness-message-${testHarnessError ? "error" : testHarnessPhase}`} aria-live="polite"><strong>{testHarnessError ? (testTransactionHash ? "Receipt check issue" : "Request not completed") : "Harness status"}</strong><span>{testHarnessError || testHarnessMessage}</span></div>
-                    <div className="testnet-links"><a href="https://docs.base.org/get-started/get-funds" rel="noreferrer" target="_blank">Base Sepolia test-funds guidance</a><a href={BASE_SEPOLIA_EXPLORER_URL} rel="noreferrer" target="_blank">Open Base Sepolia explorer</a></div>
-                  </form>
-
-                  <aside className="test-proof-record">
-                    <div className="test-proof-heading"><div><p className="eyebrow">Evidence record</p><h3>{displayedTestEvidence?.paymentIntentId ?? "Submitted evidence unavailable"}</h3></div><EvidenceBadge label={testTransactionReceipt?.status === "0x1" ? "Test-demonstrated" : "Proposed"} /></div>
-                    <dl>
-                      <div><dt>Payment-intent ID</dt><dd><code>{displayedTestEvidence?.paymentIntentId ?? "Submitted evidence unavailable"}</code><small>{testTransactionHash ? "Frozen when the wallet transaction was requested; not a production provider linkage" : "Generated locally; not yet a production provider linkage"}</small></dd></div>
-                      <div><dt>Payer address</dt><dd><code>{displayedTestEvidence?.payerAddress || (testTransactionHash ? "Submitted evidence unavailable" : "Not connected")}</code></dd></div>
-                      <div><dt>Merchant destination</dt><dd><code>{displayedTestEvidence?.merchantAddress || (testTransactionHash ? "Submitted evidence unavailable" : "Runtime input required")}</code></dd></div>
-                      <div><dt>Value</dt><dd>{displayedTestEvidence?.ethAmount ? `${displayedTestEvidence.ethAmount} test ETH` : testTransactionHash ? "Submitted evidence unavailable" : "Runtime input required"}</dd></div>
-                      <div><dt>Chain ID</dt><dd>{displayedTestEvidence?.chainId ? `${Number.parseInt(displayedTestEvidence.chainId, 16)} · ${displayedTestEvidence.chainId}` : testTransactionHash ? "Submitted evidence unavailable" : `${BASE_SEPOLIA_CHAIN_ID} expected`}</dd></div>
-                      <div><dt>Transaction hash</dt><dd><code>{testTransactionHash || "Not submitted"}</code>{testTransactionHash ? <a href={`${BASE_SEPOLIA_EXPLORER_URL}/tx/${testTransactionHash}`} rel="noreferrer" target="_blank">View on BaseScan</a> : null}</dd></div>
-                      <div><dt>Receipt status</dt><dd>{testTransactionReceipt ? (testTransactionReceipt.status === "0x1" ? "Success" : "Failed") : "Pending"}</dd></div>
-                      <div><dt>Receipt block</dt><dd>{displayBlockNumber(testTransactionReceipt?.blockNumber)}</dd></div>
-                      <div><dt>Gas used</dt><dd><code>{testTransactionReceipt?.gasUsed ?? "Pending"}</code></dd></div>
-                    </dl>
-                    {testTransactionHash ? <button className="button button-secondary button-full" disabled={testRequestPending} onClick={() => void refreshTestReceipt()} type="button">Check receipt</button> : null}
-                    <div className="proof-linkage-note"><strong>Original-intent linkage boundary</strong><p>This screen groups the local intent and testnet receipt for discussion. Production linkage still requires persisted Dynamic IDs, generated address, quote, webhook and any refund record.</p></div>
-                  </aside>
-                </div>
               </section>
             </>
           ) : null}
