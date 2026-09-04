@@ -162,5 +162,24 @@ test("upstream failures are redacted from the browser response", async () => {
   assert.equal(response.status, 502);
   const body = JSON.stringify(await response.json());
   assert.doesNotMatch(body, /provider detail/);
-  assert.match(body, /Dynamic Flow creation did not complete/);
+  assert.match(body, /Dynamic rejected the configured Base Sepolia test route/);
+});
+
+test("a disabled Dynamic Flow feature returns a useful safe explanation", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({ error: "Flow is not enabled" }, { status: 400 });
+  let response;
+  try {
+    response = await worker.fetch(createRequest({
+      paymentIntentId: "ONE-BS-ABCD1234",
+      settlementDestination: merchantAddress,
+    }), env, {});
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.error, "Dynamic Flow is not enabled for this environment.");
+  assert.equal(body.upstreamStatus, 400);
+  assert.equal(typeof body.requestId, "string");
 });

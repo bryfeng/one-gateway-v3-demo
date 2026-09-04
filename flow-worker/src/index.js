@@ -95,6 +95,56 @@ function normalizeSettlementDestination(value) {
 }
 
 /**
+ * Keep provider diagnostics useful without logging arbitrary response bodies.
+ * @param {unknown} value
+ * @param {number} [maximumLength]
+ */
+function compactDiagnostic(value, maximumLength = 200) {
+  if (typeof value !== "string") return "";
+  return value.replace(/[^\x20-\x7E]/g, " ").replace(/\s+/g, " ").trim().slice(0, maximumLength);
+}
+
+/**
+ * Extract only Dynamic's documented error code/message fields.
+ * @param {Response} response
+ */
+async function readDynamicDiagnostic(response) {
+  try {
+    /** @type {unknown} */
+    const payload = await response.clone().json();
+    if (!isRecord(payload)) return { code: "", message: "" };
+    if (typeof payload.error === "string") {
+      return { code: compactDiagnostic(payload.code, 80), message: compactDiagnostic(payload.error) };
+    }
+    if (isRecord(payload.error)) {
+      return {
+        code: compactDiagnostic(payload.error.code, 80),
+        message: compactDiagnostic(payload.error.message),
+      };
+    }
+    return { code: compactDiagnostic(payload.code, 80), message: compactDiagnostic(payload.message) };
+  } catch {
+    return { code: "", message: "" };
+  }
+}
+
+/**
+ * Convert provider status/details into a safe presenter-facing explanation.
+ * @param {number} status
+ * @param {{ code: string, message: string }} diagnostic
+ */
+function describeDynamicFailure(status, diagnostic) {
+  const message = diagnostic.message.toLowerCase();
+  if (status === 400 && message.includes("flow is not enabled")) {
+    return "Dynamic Flow is not enabled for this environment.";
+  }
+  if (status === 401) return "Dynamic did not accept the configured API token.";
+  if (status === 403) return "Dynamic denied this environment or API-token scope.";
+  if (status === 422) return "Dynamic rejected the configured Base Sepolia test route.";
+  return "Dynamic Flow creation did not complete.";
+}
+
+/**
  * @param {Request} request
  * @param {Env} env
  * @param {typeof fetch} upstreamFetch
@@ -198,8 +248,19 @@ async function handleRequest(request, env, upstreamFetch = fetch) {
   );
 
   if (!upstream.ok) {
-    console.error(JSON.stringify({ event: "dynamic_flow_create_failed", requestId, status: upstream.status }));
-    return json({ error: "Dynamic Flow creation did not complete.", upstreamStatus: upstream.status, requestId }, 502, origin);
+    const diagnostic = await readDynamicDiagnostic(upstream);
+    console.error(JSON.stringify({
+      event: "dynamic_flow_create_failed",
+      requestId,
+      status: upstream.status,
+      ...(diagnostic.code ? { dynamicCode: diagnostic.code } : {}),
+      ...(diagnostic.message ? { dynamicMessage: diagnostic.message } : {}),
+    }));
+    return json({
+      error: describeDynamicFailure(upstream.status, diagnostic),
+      upstreamStatus: upstream.status,
+      requestId,
+    }, 502, origin);
   }
 
   /** @type {unknown} */
