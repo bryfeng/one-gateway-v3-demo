@@ -16,6 +16,7 @@ export interface DynamicWalletSelection {
   providerKey: string;
   providerName: string;
   verified: boolean;
+  walletAccountId: string;
 }
 
 interface DynamicWalletConnectionProps {
@@ -82,6 +83,7 @@ export function DynamicWalletConnection({ compact = false, onClear, onVerified, 
         providerKey,
         providerName,
         verified: true,
+        walletAccountId: wallet.id,
       });
     } catch (error) {
       setLocalError(readableError(error));
@@ -108,6 +110,7 @@ export function DynamicWalletConnection({ compact = false, onClear, onVerified, 
         providerKey: wallet.walletProviderKey,
         providerName: provider?.metadata.displayName ?? "Injected EVM wallet",
         verified: true,
+        walletAccountId: wallet.id,
       });
     } catch (error) {
       setLocalError(readableError(error));

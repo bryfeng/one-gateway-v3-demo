@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run build:site && npm run worker:check",
+    "build:site": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "npm run build && node --test tests/public-build.test.mjs"
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "worker:dev": "wrangler dev --config flow-worker/wrangler.jsonc --port 8787",
+    "worker:types": "wrangler types flow-worker/worker-configuration.d.ts --config flow-worker/wrangler.jsonc --include-runtime false",
+    "worker:check": "npm run worker:types && tsc -p flow-worker/tsconfig.json && wrangler deploy --config flow-worker/wrangler.jsonc --dry-run --outdir dist-worker"
   },
   "dependencies": {
     "@dynamic-labs-sdk/client": "1.31.0",
@@ -19,11 +23,13 @@
     "viem": "2.56.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20260903.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.5",
     "typescript": "5.9.3",
-    "vite": "8.2.1"
+    "vite": "8.2.1",
+    "wrangler": "4.129.0"
   },
   "engines": {
     "node": ">=22.13.0"

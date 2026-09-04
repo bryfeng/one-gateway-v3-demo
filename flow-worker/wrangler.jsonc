@@ -1,0 +1,22 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "one-gateway-flow-demo",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "DYNAMIC_ENVIRONMENT_ID": "3608a494-ff5c-4cbc-a425-ddc382e4a90a",
+    "ALLOWED_ORIGINS": "https://bryfeng.github.io,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"
+  },
+  "secrets": {
+    "required": [
+      "DYNAMIC_API_TOKEN",
+      "ONE_DEMO_ACCESS_KEY",
+      "MERCHANT_BASE_SEPOLIA_ADDRESS"
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

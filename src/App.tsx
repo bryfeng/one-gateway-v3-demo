@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DynamicFlowHarness } from "./DynamicFlowHarness";
 import { DynamicWalletConnection, type DynamicWalletSelection } from "./DynamicWalletConnection";
 
 type View =
@@ -426,6 +427,13 @@ const viewTitles: Record<View, string> = {
   controls: "Controls & evidence",
   developer: "Developer",
 };
+
+function getInitialView(): View {
+  const requestedView = new URLSearchParams(window.location.search).get("view");
+  return requestedView && Object.prototype.hasOwnProperty.call(viewTitles, requestedView)
+    ? requestedView as View
+    : "overview";
+}
 
 const initialPayments: PaymentRow[] = [
   {
@@ -964,7 +972,7 @@ function PaymentLinkCheckout({ onClose, onPaymentAccepted }: { onClose: () => vo
 }
 
 export default function Home() {
-  const [view, setView] = useState<View>("overview");
+  const [view, setView] = useState<View>(getInitialView);
   const [selectedAccount, setSelectedAccount] = useState<MerchantAccount | null>(null);
   const [selectedWalletNetwork, setSelectedWalletNetwork] = useState("Polygon");
   const [exchangeFrom, setExchangeFrom] = useState("USD");
@@ -1017,6 +1025,7 @@ export default function Home() {
   const [testHarnessPhase, setTestHarnessPhase] = useState<TestHarnessPhase>("idle");
   const [testHarnessMessage, setTestHarnessMessage] = useState("Connect an injected wallet to begin. Nothing is sent automatically.");
   const [testHarnessError, setTestHarnessError] = useState("");
+  const [flowVerifiedWallet, setFlowVerifiedWallet] = useState<DynamicWalletSelection | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [customerType, setCustomerType] = useState<CustomerType>("iGaming operator");
   const [toast, setToast] = useState("");
@@ -1028,7 +1037,16 @@ export default function Home() {
   }, [toast]);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "instant" });
+    const url = new URL(window.location.href);
+    if (view === "overview") url.searchParams.delete("view");
+    else url.searchParams.set("view", view);
+    if (view !== "controls" && url.hash === "#dynamic-flow-demo") url.hash = "";
+    window.history.replaceState(null, "", url);
+    window.requestAnimationFrame(() => {
+      const target = window.location.hash ? document.getElementById(window.location.hash.slice(1)) : null;
+      if (target) target.scrollIntoView({ block: "start", behavior: "instant" });
+      else window.scrollTo({ top: 0, behavior: "instant" });
+    });
   }, [view]);
 
   useEffect(() => {
@@ -1108,18 +1126,18 @@ export default function Home() {
       statuses: testTransactionReceipt?.status === "0x1" ? ["Test-demonstrated"] : ["Unconfirmed"],
     },
     {
-      point: "Flow-generated deposit address",
-      control: "Address generation, expiry, sweep and refund mechanics",
-      controller: "Dynamic/Flow architecture; controller not yet evidenced",
-      oneRole: "Requests and links an address to a payment intent",
-      evidence: "Dynamic response, contract/address inspection and written control statement",
+      point: "Optional deposit-address source",
+      control: "Address generation, expiry, sweep and refund mechanics in the separate deposit-address mode",
+      controller: "Not exercised by the connected-wallet Flow path",
+      oneRole: "Would request and link an address only when that source mode is selected",
+      evidence: "No deposit-address custody claim is made from the wallet-source test",
       statuses: ["Dynamic-provided", "Unconfirmed"],
     },
     {
       point: "External execution",
-      control: "Quote, ETH→USDC conversion, fees and settlement transaction",
+      control: "Quote, prepared transaction, fees and settlement transaction",
       controller: "Execution provider to be identified",
-      oneRole: "Presents eligibility and provider output; no execution proven",
+      oneRole: "Presents eligibility and provider output; cannot sign for the payer",
       evidence: "Quote payload, named executor, fee detail and source/settlement hashes",
       statuses: ["Unconfirmed", "Legal decision"],
     },
@@ -1471,7 +1489,7 @@ export default function Home() {
 
         <div className="service-strip">
           <span className="service-icon">i</span>
-          <p><strong>Illustrative prototype · do not send production funds</strong> · Mock data and target journeys only; no production payment, embedded wallet or banking rail is connected. An optional, separately labelled Base Sepolia harness can request a user-approved public-testnet transfer.</p>
+          <p><strong>Illustrative prototype · do not send production funds</strong> · Mock data and target journeys only; no production payment, embedded wallet or banking rail is connected. Two separately labelled Base Sepolia proof tracks can request user-approved public-testnet transfers.</p>
           <button onClick={() => setProfileOpen(true)} type="button">View Day 30 / 60 / 90 scope</button>
         </div>
 
@@ -1767,7 +1785,7 @@ export default function Home() {
               <section className="panel ownership-control-panel">
                 <div className="panel-heading">
                   <div><h2>Ownership and control matrix</h2><p>Each assertion names its controller, ONE’s actual role and the next evidence needed.</p></div>
-                  <StatusBadge label="No mainnet run" tone="amber" />
+                  <StatusBadge label="Flow enabled · testnet run pending" tone="blue" />
                 </div>
                 <div className="evidence-legend" aria-label="Evidence status legend">
                   {(["Test-demonstrated", "Dynamic-provided", "Proposed", "Unconfirmed", "Legal decision"] as EvidenceLabel[]).map((label) => <EvidenceBadge key={label} label={label} />)}
@@ -1827,24 +1845,25 @@ export default function Home() {
                 <article className="panel evidence-route-card evidence-route-testnet">
                   <div className="evidence-route-heading"><span className="feature-mark">T</span><div><p className="eyebrow">Runnable proof</p><h2>Base Sepolia payer-signature harness</h2></div><EvidenceBadge label={testTransactionReceipt?.status === "0x1" ? "Test-demonstrated" : "Unconfirmed"} /></div>
                   <p><strong>Runtime payer wallet → runtime merchant address · native test ETH on Base Sepolia.</strong></p>
-                  <ul><li>Can prove the payer’s injected wallet submitted a transaction.</li><li>Can prove successful public-testnet funds movement when a receipt reports success.</li><li>The transfer itself does not use Dynamic or prove conversion, screening, deposit-address custody or USDC settlement.</li></ul>
+                  <ul><li>Can prove the payer’s injected wallet submitted a transaction.</li><li>Can prove successful public-testnet funds movement when a receipt reports success.</li><li>This native-ETH transfer does not use Dynamic or prove conversion, screening, deposit-address custody or USDC settlement.</li></ul>
                 </article>
                 <article className="panel evidence-route-card">
-                  <div className="evidence-route-heading"><span className="feature-mark">D</span><div><p className="eyebrow">Separate production track</p><h2>Dynamic Flow · Base mainnet ETH → USDC</h2></div><EvidenceBadge label="Unconfirmed" /></div>
-                  <p><strong>Payer ETH → Flow-generated deposit address → external execution → merchant-controlled Base USDC destination.</strong></p>
-                  <ul><li>The Dynamic browser SDK is integrated below; Flow creation and mainnet execution have not been run.</li><li>No generated address, controller, executor, screening decision, refund authority or settlement hash is represented as proven.</li><li>Base Sepolia cannot demonstrate an ETH→USDC Flow swap; Dynamic testnet Flow supports wallet-source same-token routes only.</li><li>Any mainnet transaction requires a separate, explicit authorization outside this harness.</li></ul>
-                  <div className="quote-only-strip"><StatusBadge label="Quote-only" tone="blue" /><span>Mainnet execution not run</span></div>
+                  <div className="evidence-route-heading"><span className="feature-mark">D</span><div><p className="eyebrow">Credentialed test track</p><h2>Dynamic Flow · Base Sepolia USDC → USDC</h2></div><EvidenceBadge label="Unconfirmed" /></div>
+                  <p><strong>Payer-controlled wallet → Dynamic-prepared transaction and screening → merchant-controlled Base Sepolia USDC destination.</strong></p>
+                  <ul><li>Flow entitlement is enabled for this Dynamic environment; the scoped server token has not been created or deployed.</li><li>The wallet-source route does not inherently use a Flow-generated deposit address. That is a separate source mode and custody question.</li><li>The test route is same-token and same-network because Dynamic testnets do not support Flow swaps or bridges.</li><li>Completion requires a Dynamic Flow ID, cleared risk state, source hash, final settlement state and merchant-destination receipt.</li></ul>
+                  <div className="quote-only-strip"><StatusBadge label="Flow enabled" tone="green" /><span>Base Sepolia enabled · private backend pending</span></div>
                 </article>
               </section>
 
               <section className="panel dynamic-evidence-panel">
-                <DynamicWalletConnection />
+                <DynamicWalletConnection onClear={() => setFlowVerifiedWallet(null)} onVerified={setFlowVerifiedWallet} selectedAddress={flowVerifiedWallet?.address} />
                 <div className="dynamic-flow-boundary">
-                  <div><span className="feature-mark">1</span><p><strong>Server creates the payment Flow</strong><small>Requires a private <code>flow.write</code> API token. No such credential is present in this public site.</small></p></div>
-                  <div><span className="feature-mark">2</span><p><strong>Browser attaches the verified wallet</strong><small>Dynamic returns a Flow-scoped session capability, then prepares quote and signing steps.</small></p></div>
-                  <div><span className="feature-mark">3</span><p><strong>Providers execute and settle</strong><small>Provider IDs, transaction hashes, webhooks, refund records and final settlement remain separate evidence.</small></p></div>
+                  <div><span className="feature-mark">1</span><p><strong>ONE server fixes the payment Flow</strong><small>Amount, Base Sepolia USDC and the merchant-controlled destination cannot be changed by the public client.</small></p></div>
+                  <div><span className="feature-mark">2</span><p><strong>Dynamic attaches and screens the payer</strong><small>A scoped one-Flow capability drives quote, prepare and broadcast; a blocked or review result stops the Gateway path.</small></p></div>
+                  <div><span className="feature-mark">3</span><p><strong>Payer signs; Dynamic tracks settlement</strong><small>The payer wallet controls approval. Source and settlement hashes remain distinct evidence fields until final completion.</small></p></div>
                 </div>
-                <div className="mandatory-control-note"><strong>Current environment boundary</strong><p>The supplied Dynamic sandbox publicly exposes Ethereum mainnet, not Base Sepolia. Flow entitlement and the server API token remain unconfirmed. Enabling a network in Dynamic does not place ONE in custody; contracts, key control, routing authority, refund authority and settlement evidence still determine the operational and legal analysis.</p></div>
+                <div className="mandatory-control-note"><strong>Current environment boundary</strong><p>Flow and Base Sepolia are enabled and <code>flow.write</code> is available, but no scoped token exists yet. Enabling the network or orchestrating checkout does not place ONE in custody; key control, destination ownership, contracts, transaction construction, refund authority and settlement evidence still determine the operational and legal analysis.</p></div>
+                <DynamicFlowHarness verifiedWallet={flowVerifiedWallet} />
               </section>
 
               <section className="panel test-harness-panel">
