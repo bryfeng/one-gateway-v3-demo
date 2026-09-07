@@ -63,6 +63,7 @@ export function DynamicWalletConnection({ compact = false, onClear, onVerified, 
 
   const walletAccounts = walletsQuery.data ?? [];
   const missingFields = user?.missingFields ?? [];
+  const missingFieldLabels = missingFields.map((field) => field.label || field.name).filter(Boolean);
   const pending = connectMutation.isPending || proveMutation.isPending || logoutMutation.isPending;
   const statusLabel = initStatus === "finished"
     ? "Dynamic SDK ready"
@@ -184,7 +185,7 @@ export function DynamicWalletConnection({ compact = false, onClear, onVerified, 
         )
       ) : null}
 
-      {missingFields.length ? <div className="dynamic-onboarding-note"><strong>Sandbox onboarding remains separate</strong><span>Dynamic currently reports required profile fields: {missingFields.join(", ")}. Wallet ownership evidence does not, by itself, complete that onboarding.</span></div> : null}
+      {missingFieldLabels.length ? <div className="dynamic-onboarding-note"><strong>Sandbox onboarding remains separate</strong><span>Dynamic currently reports required profile fields: {missingFieldLabels.join(", ")}. Wallet ownership evidence does not, by itself, complete that onboarding.</span></div> : null}
       {!compact ? <p className="dynamic-scope-note"><strong>Scope:</strong> this action contacts Dynamic and requests a fresh wallet ownership signature. For a restored session, the new challenge is also verified locally against the selected EVM address; the stored credential alone cannot unlock checkout. It does not create a Flow, request a quote, call <code>eth_sendTransaction</code>, or move funds.</p> : null}
     </section>
   );

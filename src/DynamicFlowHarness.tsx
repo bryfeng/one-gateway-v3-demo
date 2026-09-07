@@ -573,10 +573,10 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
           </label>
         </details>
 
-        {flow?.fromAddress && !selectedWalletMatchesFlow ? (
+        {flow?.fromAddress && !selectedWalletMatchesFlow && !isTerminalFlow(flow) ? (
           <div className="dynamic-flow-wallet-warning" role="alert">
             <strong>Reconnect the screened payer wallet</strong>
-            <span>Dynamic attached {shortAddress(flow.fromAddress)}; the selected wallet is different.</span>
+            <span>Dynamic screened {shortAddress(flow.fromAddress)}. Freshly prove that same wallet before continuing.</span>
           </div>
         ) : null}
         {resolvedSettlementDestinationConflicts ? (
@@ -596,6 +596,8 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
         <div className="dynamic-flow-primary-action">
           {pending ? <button className="button button-primary" disabled type="button">Working…</button> : !flowId ? (
             <button className="button button-primary" disabled={!canCreate} onClick={() => void createFlow()} type="button">Start Fireblocks Flow</button>
+          ) : (isTerminalFlow(flow) || flowCompleted) && canStartNew ? (
+            <button className="button button-primary" onClick={startNewAttempt} type="button">Start new test</button>
           ) : canAttach ? (
             <button className="button button-primary" onClick={() => void attachAndScreen()} type="button">Attach wallet + screen</button>
           ) : canQuote ? (
