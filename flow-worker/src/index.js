@@ -10,6 +10,7 @@ const FLOW_EXPIRES_IN_SECONDS = 900;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const EVM_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 const PAYMENT_INTENT_ID = /^ONE-BS-[A-Z0-9-]{8,64}$/;
+const FLOW_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * @param {unknown} value
@@ -145,6 +146,49 @@ function describeDynamicFailure(status, diagnostic) {
 }
 
 /**
+ * Verify the complete server-visible configuration before the browser is
+ * allowed to treat a Flow ID as bound to its local payment attempt.
+ * @param {Record<string, unknown>} flow
+ * @param {{ flowId: string, paymentIntentId: string, settlementDestination: string }} expected
+ */
+function flowConfigurationMatches(flow, expected) {
+  if (flow.id !== expected.flowId
+    || flow.mode !== "payment"
+    || flow.amount !== FLOW_AMOUNT_USD
+    || flow.currency !== "USD"
+    || flow.disableSwaps !== true
+    || flow.pegStablecoins !== true
+    || !isRecord(flow.memo)
+    || flow.memo.orderId !== expected.paymentIntentId
+    || !isRecord(flow.settlementConfig)
+    || flow.settlementConfig.strategy !== "cheapest"
+    || !Array.isArray(flow.settlementConfig.settlements)
+    || flow.settlementConfig.settlements.length !== 1
+    || !isRecord(flow.destinationConfig)
+    || !Array.isArray(flow.destinationConfig.destinations)
+    || flow.destinationConfig.destinations.length !== 1) {
+    return false;
+  }
+
+  const settlement = flow.settlementConfig.settlements[0];
+  const destination = flow.destinationConfig.destinations[0];
+  if (!isRecord(settlement)
+    || settlement.chainName !== "EVM"
+    || settlement.chainId !== BASE_SEPOLIA_CHAIN_ID
+    || settlement.symbol !== "USDC"
+    || settlement.tokenDecimals !== 6
+    || typeof settlement.tokenAddress !== "string"
+    || settlement.tokenAddress.toLowerCase() !== BASE_SEPOLIA_USDC.toLowerCase()
+    || !isRecord(destination)
+    || destination.chainName !== "EVM"
+    || destination.type !== "address") {
+    return false;
+  }
+
+  return normalizeSettlementDestination(destination.identifier) === expected.settlementDestination;
+}
+
+/**
  * @param {Request} request
  * @param {Env} env
  * @param {typeof fetch} upstreamFetch
@@ -169,9 +213,12 @@ async function handleRequest(request, env, upstreamFetch = fetch) {
     }, 200, origin);
   }
 
-  if (url.pathname !== "/v1/flows") return json({ error: "Not found." }, 404, origin);
+  const isCreateRequest = url.pathname === "/v1/flows";
+  const isVerifyRequest = url.pathname === "/v1/flows/verify";
+  if (!isCreateRequest && !isVerifyRequest) return json({ error: "Not found." }, 404, origin);
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405, origin);
   if (missingConfiguration(env)) return json({ error: "Flow demo backend is not configured." }, 503, origin);
+  if (isVerifyRequest && !origin) return json({ error: "Origin is required." }, 403, null);
 
   const suppliedAccessKey = request.headers.get("X-One-Demo-Key") ?? "";
   if (!suppliedAccessKey || !(await safeEqual(suppliedAccessKey, env.ONE_DEMO_ACCESS_KEY))) {
@@ -192,15 +239,87 @@ async function handleRequest(request, env, upstreamFetch = fetch) {
     return json({ error: "Request body must be valid JSON." }, 400, origin);
   }
   if (!isRecord(body)) return json({ error: "Request body must be an object." }, 400, origin);
-  const allowedKeys = new Set(["paymentIntentId", "settlementDestination"]);
+  const allowedKeys = new Set(isVerifyRequest
+    ? ["flowId", "paymentIntentId", "settlementDestination"]
+    : ["paymentIntentId", "settlementDestination"]);
   const unknownKeys = Object.keys(body).filter((key) => !allowedKeys.has(key));
-  if (unknownKeys.length) return json({ error: "Only paymentIntentId and settlementDestination are accepted." }, 400, origin);
+  if (unknownKeys.length) {
+    return json({
+      error: isVerifyRequest
+        ? "Only flowId, paymentIntentId and settlementDestination are accepted."
+        : "Only paymentIntentId and settlementDestination are accepted.",
+    }, 400, origin);
+  }
 
   const paymentIntentId = typeof body.paymentIntentId === "string" ? body.paymentIntentId : "";
   if (!PAYMENT_INTENT_ID.test(paymentIntentId)) return json({ error: "Payment intent ID is not valid." }, 400, origin);
   const settlementDestination = normalizeSettlementDestination(body.settlementDestination);
   if (!settlementDestination) {
     return json({ error: "Settlement destination must be a valid, non-zero EVM address and cannot be the USDC contract." }, 400, origin);
+  }
+
+  if (isVerifyRequest) {
+    const flowId = typeof body.flowId === "string" ? body.flowId : "";
+    if (!FLOW_ID.test(flowId)) return json({ error: "Flow ID must be a valid UUID." }, 400, origin);
+
+    const requestId = crypto.randomUUID();
+    /** @type {Response} */
+    let upstream;
+    try {
+      upstream = await upstreamFetch(
+        `https://app.dynamicauth.com/api/v0/server/${env.DYNAMIC_ENVIRONMENT_ID}/flow/${flowId}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${env.DYNAMIC_API_TOKEN}`,
+            "X-Request-ID": requestId,
+          },
+        },
+      );
+    } catch {
+      console.error(JSON.stringify({ event: "dynamic_flow_verify_unreachable", requestId }));
+      return json({ error: "Dynamic Flow verification did not complete.", requestId }, 502, origin);
+    }
+
+    if (!upstream.ok) {
+      const diagnostic = await readDynamicDiagnostic(upstream);
+      console.error(JSON.stringify({
+        event: "dynamic_flow_verify_failed",
+        requestId,
+        status: upstream.status,
+        ...(diagnostic.code ? { dynamicCode: diagnostic.code } : {}),
+        ...(diagnostic.message ? { dynamicMessage: diagnostic.message } : {}),
+      }));
+      return json({
+        error: "Dynamic Flow verification did not complete.",
+        upstreamStatus: upstream.status,
+        requestId,
+      }, 502, origin);
+    }
+
+    /** @type {unknown} */
+    let upstreamBody;
+    try {
+      upstreamBody = await upstream.json();
+    } catch {
+      console.error(JSON.stringify({ event: "dynamic_flow_verify_invalid_response", requestId }));
+      return json({ error: "Dynamic returned an invalid Flow verification response.", requestId }, 502, origin);
+    }
+    const flow = isRecord(upstreamBody) && isRecord(upstreamBody.flow)
+      ? upstreamBody.flow
+      : upstreamBody;
+    if (!isRecord(flow)) {
+      console.error(JSON.stringify({ event: "dynamic_flow_verify_invalid_response", requestId }));
+      return json({ error: "Dynamic returned an invalid Flow verification response.", requestId }, 502, origin);
+    }
+    if (!flowConfigurationMatches(flow, { flowId, paymentIntentId, settlementDestination })) {
+      console.error(JSON.stringify({ event: "dynamic_flow_verify_mismatch", requestId, paymentIntentId, flowId }));
+      return json({ error: "Dynamic Flow configuration does not match this payment attempt.", requestId }, 409, origin);
+    }
+
+    console.log(JSON.stringify({ event: "dynamic_flow_verified", requestId, paymentIntentId, flowId }));
+    return json({ verified: true }, 200, origin);
   }
 
   const requestId = crypto.randomUUID();

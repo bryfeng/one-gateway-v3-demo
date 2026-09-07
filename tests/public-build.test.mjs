@@ -104,10 +104,14 @@ test("Dynamic Flow test harness preserves the real risk and settlement boundarie
     "Start Fireblocks Flow",
     "Attach wallet + screen",
     "Get quote",
+    "Verify destination",
     "Review & pay in wallet",
     "Recover quote",
     "Settlement destination mismatch",
-    "readFlowSettlementDestination",
+    "Merchant destination",
+    "verifyDestination",
+    "destinationVerified",
+    "resolvedSettlementDestination",
     "payerDiffersFromDestination",
     "source_confirmed",
     "settlementState === \"completed\"",
@@ -129,25 +133,26 @@ test("Dynamic Flow test harness preserves the real risk and settlement boundarie
   assert.match(dynamicFlowSource, /A USDC approval may already exist/);
   assert.match(dynamicFlowSource, /backendRouteMatchesDemo/);
   assert.match(dynamicFlowSource, /canClearUnreadableAttempt/);
+  assert.match(dynamicFlowSource, /\/v1\/flows\/verify/);
+  assert.match(dynamicFlowSource, /JSON\.stringify\(\{[\s\S]*?flowId: activeFlowId,[\s\S]*?paymentIntentId,[\s\S]*?settlementDestination: normalizedSettlementDestination/);
+  assert.match(dynamicFlowSource, /isValidVerifyFlowResponse/);
+  assert.match(dynamicFlowSource, /setDestinationVerified\(true\)/);
   assert.doesNotMatch(dynamicFlowSource, /sessionToken/);
   assert.doesNotMatch(dynamicFlowSource, /console\.(?:log|error|warn)/);
-  assert.doesNotMatch(dynamicFlowSource, /!flow\?\.toAddress \|\|/);
-  assert.match(dynamicFlowSource, /flowSettlementDestination\s*&&\s*flowSettlementDestination\.toLowerCase\(\) === normalizedSettlementDestination\.toLowerCase\(\)/);
-  assert.match(dynamicFlowSource, /flow\?\.executionState === "initiated" && !destinationConflictsWithFlow/);
-  assert.match(dynamicFlowSource, /if \(attachedDestination && attachedDestination\.toLowerCase\(\) !== normalizedSettlementDestination\.toLowerCase\(\)\)/);
-  assert.match(dynamicFlowSource, /if \(screenedDestination && screenedDestination\.toLowerCase\(\) !== normalizedSettlementDestination\.toLowerCase\(\)\)/);
-  assert.match(dynamicFlowSource, /currentDestination && !incomingDestination/);
-  assert.match(dynamicFlowSource, /toAddress: current\.toAddress/);
-  assert.match(dynamicFlowSource, /destinationConfig: current\.destinationConfig/);
+  assert.doesNotMatch(dynamicFlowSource, /flow\?\.toAddress/);
+  assert.doesNotMatch(dynamicFlowSource, /flow\.destinationConfig|flow\?\.destinationConfig/);
+  assert.doesNotMatch(dynamicFlowSource, /readFlowSettlementDestination|destinationMatchesFlow|destinationConflictsWithFlow/);
+  assert.match(dynamicFlowSource, /flow\?\.settlement\?\.toAddress/);
   assert.match(dynamicFlowSource, /flow\.executionState === "source_attached" \|\| signingCanBeRequoted/);
   assert.doesNotMatch(dynamicFlowSource, /\["source_attached", "quoted"\]\.includes\(flow\.executionState\)/);
   assert.match(dynamicFlowSource, /async function attachAndScreen\(\)[\s\S]*?!payerDiffersFromDestination/);
-  assert.match(dynamicFlowSource, /async function requestQuote\(\)[\s\S]*?!payerDiffersFromDestination[\s\S]*?destinationConflictsWithFlow/);
-  assert.match(dynamicFlowSource, /const quotedDestination[\s\S]*?!quotedDestination \|\| quotedDestination\.toLowerCase\(\) !== normalizedSettlementDestination\.toLowerCase\(\)/);
-  assert.match(dynamicFlowSource, /async function submitFlow\(\)[\s\S]*?!payerDiffersFromDestination[\s\S]*?!destinationMatchesFlow/);
+  assert.match(dynamicFlowSource, /async function requestQuote\(\)[\s\S]*?!payerDiffersFromDestination[\s\S]*?!accessKey/);
+  assert.match(dynamicFlowSource, /async function requestQuote\(\)[\s\S]*?await verifyDestination\(flowId\)/);
+  assert.doesNotMatch(dynamicFlowSource, /const quotedDestination/);
+  assert.match(dynamicFlowSource, /async function submitFlow\(\)[\s\S]*?!payerDiffersFromDestination[\s\S]*?!destinationVerified[\s\S]*?resolvedSettlementDestinationConflicts/);
 });
 
-test("the Flow-create worker is narrow and fixes all value-moving configuration", () => {
+test("the Flow create-and-verify worker is narrow and fixes all value-moving configuration", () => {
   assert.match(flowWorkerSource, /Authorization: `Bearer \$\{env\.DYNAMIC_API_TOKEN\}`/);
   assert.match(flowWorkerSource, /ONE_DEMO_ACCESS_KEY/);
   assert.doesNotMatch(flowWorkerSource, /MERCHANT_BASE_SEPOLIA_ADDRESS/);
@@ -159,6 +164,10 @@ test("the Flow-create worker is narrow and fixes all value-moving configuration"
   assert.match(flowWorkerSource, /disableSwaps: true/);
   assert.match(flowWorkerSource, /pegStablecoins: true/);
   assert.match(flowWorkerSource, /Only paymentIntentId and settlementDestination are accepted/);
+  assert.match(flowWorkerSource, /\/v1\/flows\/verify/);
+  assert.match(flowWorkerSource, /flowConfigurationMatches/);
+  assert.match(flowWorkerSource, /Only flowId, paymentIntentId and settlementDestination are accepted/);
+  assert.match(flowWorkerSource, /return json\(\{ verified: true \}, 200, origin\)/);
   assert.doesNotMatch(flowWorkerSource, /body\.payerAddress|payerAddress,/);
   assert.doesNotMatch(flowWorkerSource, /dyn_[A-Za-z0-9_-]{8,}/);
 });
