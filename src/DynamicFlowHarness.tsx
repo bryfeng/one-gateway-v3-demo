@@ -561,7 +561,9 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
             spellCheck={false}
             value={settlementDestination}
           />
-          <small>{settlementDestinationError || "Editable until the Flow is created. Entering an address does not prove who owns it."}</small>
+          <small>{settlementDestinationError || (flowId
+            ? "Locked when this Flow was created. Server verification is required before signing."
+            : "Editable until the Flow is created. Entering an address does not prove who owns it.")}</small>
         </label>
 
         <details className="dynamic-flow-presenter-access">
@@ -646,7 +648,9 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
           <small>Source confirmation is not final settlement. Delivery to an address does not, by itself, prove ownership.</small>
           <div className="dynamic-flow-secondary-actions">
             <button className="text-button" disabled={flowQuery.isFetching} onClick={() => void refreshFlow()} type="button">Refresh</button>
-            <button className="text-button" disabled={!canStartNew} onClick={startNewAttempt} type="button">{canClearUnreadableAttempt ? "Clear attempt" : "Start new"}</button>
+            {(isTerminalFlow(flow) || flowCompleted) && canStartNew ? null : (
+              <button className="text-button" disabled={!canStartNew} onClick={startNewAttempt} type="button">{canClearUnreadableAttempt ? "Clear attempt" : "Start new"}</button>
+            )}
           </div>
         </div>
       ) : null}
