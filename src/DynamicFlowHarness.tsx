@@ -157,7 +157,21 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
   });
 
   useEffect(() => {
-    if (flowQuery.data) setFlowSnapshot(flowQuery.data);
+    const incoming = flowQuery.data;
+    if (!incoming) return;
+    setFlowSnapshot((current) => {
+      if (!current || current.id !== incoming.id) return incoming;
+      const currentDestination = readFlowSettlementDestination(current);
+      const incomingDestination = readFlowSettlementDestination(incoming);
+      if (currentDestination && !incomingDestination) {
+        return {
+          ...incoming,
+          toAddress: current.toAddress,
+          destinationConfig: current.destinationConfig,
+        };
+      }
+      return incoming;
+    });
   }, [flowQuery.data]);
 
   const flow = flowId
@@ -203,6 +217,7 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
     && flowSettlementDestination
     && flowSettlementDestination.toLowerCase() === normalizedSettlementDestination.toLowerCase(),
   );
+  const destinationConflictsWithFlow = Boolean(flowSettlementDestination && !destinationMatchesFlow);
   const signingCanBeRequoted = flow?.executionState === "signing" && !flow.txHash;
   const backendRouteMatchesDemo = Boolean(
     backendHealth?.route.amount === "1.00"
@@ -228,7 +243,7 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
     && walletAccount
     && payerDiffersFromDestination
     && (
-      (flow?.executionState === "initiated" && destinationMatchesFlow)
+      (flow?.executionState === "initiated" && !destinationConflictsWithFlow)
       || (createdInThisPage && !flow && !flowQuery.isError)
     )
     && !pending,
@@ -237,9 +252,9 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
     flowId
     && selectedWalletMatchesFlow
     && payerDiffersFromDestination
-    && destinationMatchesFlow
+    && !destinationConflictsWithFlow
     && flow?.riskState === "cleared"
-    && (["source_attached", "quoted"].includes(flow.executionState) || signingCanBeRequoted)
+    && (flow.executionState === "source_attached" || signingCanBeRequoted)
     && !pending,
   );
   const canSubmit = Boolean(
@@ -365,7 +380,7 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
         throw new Error("Dynamic did not bind this Flow to the freshly verified wallet. Quote and signing remain unavailable.");
       }
       const attachedDestination = readFlowSettlementDestination(attached.flow);
-      if (!attachedDestination || attachedDestination.toLowerCase() !== normalizedSettlementDestination.toLowerCase()) {
+      if (attachedDestination && attachedDestination.toLowerCase() !== normalizedSettlementDestination.toLowerCase()) {
         throw new Error("Dynamic returned a settlement destination different from this Flow request. Quote and signing remain unavailable.");
       }
       if (attachedDestination.toLowerCase() === walletAccount.address.toLowerCase()) {
@@ -373,7 +388,7 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
       }
       const screened = await waitForRiskDecision(flowId);
       const screenedDestination = readFlowSettlementDestination(screened);
-      if (!screenedDestination || screenedDestination.toLowerCase() !== normalizedSettlementDestination.toLowerCase()) {
+      if (screenedDestination && screenedDestination.toLowerCase() !== normalizedSettlementDestination.toLowerCase()) {
         throw new Error("Dynamic did not preserve the requested settlement destination after screening. Quote and signing remain unavailable.");
       }
       setLocalMessage(screened.riskState === "cleared"
@@ -387,7 +402,7 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
   }
 
   async function requestQuote() {
-    if (!flowId || !walletAccount || !selectedWalletMatchesFlow || !payerDiffersFromDestination || !destinationMatchesFlow) return;
+    if (!flowId || !walletAccount || !selectedWalletMatchesFlow || !payerDiffersFromDestination || destinationConflictsWithFlow) return;
     setLocalError("");
     setLocalMessage(signingCanBeRequoted
       ? "Refreshing the Flow after an interrupted wallet sequence. This replaces the old signing payload and does not move funds."
@@ -530,7 +545,7 @@ export function DynamicFlowHarness({ verifiedWallet }: DynamicFlowHarnessProps) 
             <span>Dynamic attached {shortAddress(flow.fromAddress)}; the selected wallet is different.</span>
           </div>
         ) : null}
-        {flow?.toAddress && !destinationMatchesFlow ? (
+        {destinationConflictsWithFlow ? (
           <div className="dynamic-flow-wallet-warning" role="alert">
             <strong>Settlement destination mismatch</strong>
             <span>Dynamic returned a different destination. Quote and payment remain locked.</span>

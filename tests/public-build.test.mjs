@@ -133,8 +133,17 @@ test("Dynamic Flow test harness preserves the real risk and settlement boundarie
   assert.doesNotMatch(dynamicFlowSource, /console\.(?:log|error|warn)/);
   assert.doesNotMatch(dynamicFlowSource, /!flow\?\.toAddress \|\|/);
   assert.match(dynamicFlowSource, /flowSettlementDestination\s*&&\s*flowSettlementDestination\.toLowerCase\(\) === normalizedSettlementDestination\.toLowerCase\(\)/);
+  assert.match(dynamicFlowSource, /flow\?\.executionState === "initiated" && !destinationConflictsWithFlow/);
+  assert.match(dynamicFlowSource, /if \(attachedDestination && attachedDestination\.toLowerCase\(\) !== normalizedSettlementDestination\.toLowerCase\(\)\)/);
+  assert.match(dynamicFlowSource, /if \(screenedDestination && screenedDestination\.toLowerCase\(\) !== normalizedSettlementDestination\.toLowerCase\(\)\)/);
+  assert.match(dynamicFlowSource, /currentDestination && !incomingDestination/);
+  assert.match(dynamicFlowSource, /toAddress: current\.toAddress/);
+  assert.match(dynamicFlowSource, /destinationConfig: current\.destinationConfig/);
+  assert.match(dynamicFlowSource, /flow\.executionState === "source_attached" \|\| signingCanBeRequoted/);
+  assert.doesNotMatch(dynamicFlowSource, /\["source_attached", "quoted"\]\.includes\(flow\.executionState\)/);
   assert.match(dynamicFlowSource, /async function attachAndScreen\(\)[\s\S]*?!payerDiffersFromDestination/);
-  assert.match(dynamicFlowSource, /async function requestQuote\(\)[\s\S]*?!payerDiffersFromDestination[\s\S]*?!destinationMatchesFlow/);
+  assert.match(dynamicFlowSource, /async function requestQuote\(\)[\s\S]*?!payerDiffersFromDestination[\s\S]*?destinationConflictsWithFlow/);
+  assert.match(dynamicFlowSource, /const quotedDestination[\s\S]*?!quotedDestination \|\| quotedDestination\.toLowerCase\(\) !== normalizedSettlementDestination\.toLowerCase\(\)/);
   assert.match(dynamicFlowSource, /async function submitFlow\(\)[\s\S]*?!payerDiffersFromDestination[\s\S]*?!destinationMatchesFlow/);
 });
 
