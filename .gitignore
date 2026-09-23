@@ -9,3 +9,4 @@ dist/
 !flow-worker/.dev.vars.example
 dist-worker/
 .wrangler/
+.local/

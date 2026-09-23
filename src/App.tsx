@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DynamicFlowHarness } from "./DynamicFlowHarness";
+import { MerchantCycle } from "./MerchantCycle";
 import { DynamicWalletConnection, type DynamicWalletSelection } from "./DynamicWalletConnection";
 
 type View =
@@ -10,6 +11,7 @@ type View =
   | "activation"
   | "accounts"
   | "payments"
+  | "merchant-cycle"
   | "payouts"
   | "settlements"
   | "reporting"
@@ -409,6 +411,7 @@ const navGroups: Array<{ label: string; items: Array<{ id: View; label: string; 
   {
     label: "Build",
     items: [
+      { id: "merchant-cycle", label: "Merchant cycle", mark: "M" },
       { id: "controls", label: "Flow demo", mark: "F" },
       { id: "developer", label: "Developer", mark: "D" },
     ],
@@ -421,6 +424,7 @@ const viewTitles: Record<View, string> = {
   activation: "Activation",
   accounts: "Accounts & wallets",
   payments: "Payments",
+  "merchant-cycle": "Merchant payment cycle",
   payouts: "Payouts",
   settlements: "Settlements",
   reporting: "Reporting",
@@ -1489,7 +1493,7 @@ export default function Home() {
 
         <div className="service-strip">
           <span className="service-icon">i</span>
-          <p><strong>Testnet demo only · do not send production funds.</strong> Any transaction requires approval in the payer wallet.</p>
+          <p>{view === "merchant-cycle" ? <><strong>Local mock walkthrough.</strong> Payments and receipts here are simulated; no funds move.</> : <><strong>Testnet demo only · do not send production funds.</strong> Any transaction requires approval in the payer wallet.</>}</p>
           <button onClick={() => setProfileOpen(true)} type="button">View Day 30 / 60 / 90 scope</button>
         </div>
 
@@ -1780,6 +1784,7 @@ export default function Home() {
             </>
           ) : null}
 
+          {view === "merchant-cycle" ? <MerchantCycle /> : null}
           {view === "developer" ? (
             <>
               <PageHeader title="Developer" description="The target API, sandbox and normalized-event experience for Gateway V3.">

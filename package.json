@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "demo:api": "node demo-api/server.mjs",
+    "test:demo": "node --test tests/demo-api.test.mjs",
     "build": "npm run build:site && npm run worker:check",
     "build:site": "tsc --noEmit && vite build",
     "preview": "vite preview",

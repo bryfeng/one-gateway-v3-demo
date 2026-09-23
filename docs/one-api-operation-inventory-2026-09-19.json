@@ -1,0 +1,159 @@
+{
+  "source": "https://docs.one.io/",
+  "retrievedAt": "2026-09-19",
+  "openapi": "3.0.4",
+  "server": "https://integration-api.uk-sbx-1.credis.tech",
+  "operationCount": 25,
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/accounts",
+      "summary": "Get accounts",
+      "operationId": "GetAccountsV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/accounts",
+      "summary": "Create Bank account",
+      "operationId": "CreateBankAccountsV1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/accounts/{accountId}",
+      "summary": "Get account by ID",
+      "operationId": "GetAccountByIdV1"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/accounts/{accountId}/primary",
+      "summary": "Set account as primary",
+      "operationId": "SetPrimaryAccountV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/token",
+      "summary": "Get access token",
+      "operationId": "PostTokenV1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/crypto-custody/withdrawal-addresses",
+      "summary": "List whitelisted withdrawal addresses",
+      "operationId": "GetWithdrawalAddressesV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/crypto-custody/withdrawal-addresses",
+      "summary": "Register a whitelisted withdrawal address",
+      "operationId": "CreateWithdrawalAddressV1"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/crypto-custody/withdrawal-addresses/{id}",
+      "summary": "Rename a whitelisted withdrawal address",
+      "operationId": "UpdateWithdrawalAddressV1"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/crypto-custody/withdrawal-addresses/{id}",
+      "summary": "Remove a whitelisted withdrawal address",
+      "operationId": "DeleteWithdrawalAddressV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/crypto-custody/withdrawals",
+      "summary": "Submit a crypto withdrawal",
+      "operationId": "CreateCryptoWithdrawalV1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/exchange-rates",
+      "summary": "Get estimated exchange rate",
+      "operationId": "GetExchangeRateV1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organisation",
+      "summary": "Get organisation info",
+      "operationId": "GetOrganisationInfoV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organisation/subsidiaries",
+      "summary": "Create subsidiary organisation",
+      "operationId": "CreateSubsidiaryOrganisationV1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/payments/{paymentId}",
+      "summary": "Get payment by id",
+      "operationId": "GetPaymentByIdV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payments/swift",
+      "summary": "Create a SWIFT Payment",
+      "operationId": "CreateSwiftPaymentV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payments/sepa",
+      "summary": "Create a SEPA Payment",
+      "operationId": "CreateSepaPaymentV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payments/chaps",
+      "summary": "Create CHAPS Payment",
+      "operationId": "CreateChapsPaymentV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payments/fps",
+      "summary": "Create FPS Payment",
+      "operationId": "CreateFpsPaymentV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payments/transfers",
+      "summary": "Create an internal transfer",
+      "operationId": "CreateInternalTransferV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payments/internal",
+      "summary": "Create an internal payment",
+      "operationId": "CreateInternalPaymentV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payout/spot-rate",
+      "summary": "SpotRate",
+      "operationId": "SpotRateV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payout/book-deal",
+      "summary": "BookDeal",
+      "operationId": "BookDealV1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payout/instruct-deal",
+      "summary": "InstructDeal",
+      "operationId": "InstructDealV1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/transactions/{transactionId}",
+      "summary": "Get transaction by id",
+      "operationId": "GetTransactionByIdV1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/transactions",
+      "summary": "Get transactions",
+      "operationId": "GetTransactionsV1"
+    }
+  ]
+}

@@ -4,6 +4,26 @@ Interactive prototype for discussing the target ONE Gateway V3 merchant experien
 
 Live demo: https://bryfeng.github.io/one-gateway-v3-demo/
 
+## Local ONE → Flow address test
+
+The [local API sequence](docs/2026-09-23-local-one-flow.md) reads the receiving address from ONE's sandbox and passes it directly to Flow. It needs no HTTP server, Cloudflare deployment, or payer address. It then reads the server-side Flow to verify the destination. This test uses Base Sepolia test USDC; the ONE account supplies the EVM address, not a claim of supported ONE ledger credit. Current Flow testnet docs require a swap or bridge, so this script allows routing; the older browser harness below still has swaps disabled.
+
+## API specification first — 20 September 2026
+
+Start with the [four-section HTML brief](../one-api-brief/dist/one-gateway-api-brief.html) for a compact business view with expandable API details.
+
+The [API specification outline](docs/2026-09-20-api-spec-outline.md) is the starting point for the next mock revision. It explains all 25 published ONE operations in technical and business terms, maps Dynamic Business Accounts and Fireblocks Flow, and separates proposed Gateway contracts from existing provider calls. Current mock routes remain draft examples. Dynamic Business Accounts are documented as early access; quorum policies are marked coming soon. No additional implementation was made as part of that specification review.
+
+## Local merchant cycle added 19 September 2026
+
+The local **Merchant cycle** view adds working mock HTTP APIs and a separate payer checkout. It follows the 17 September meeting with Mark: create a request, open checkout, distinguish source confirmation from settlement, and inspect merchant event receipts. Read the [API review and demo handoff](docs/2026-09-19-api-review-and-demo.md) for sources, the existing-versus-proposed contract boundary, acceptance criteria and remaining integration work.
+
+Start `npm run demo:api` in one terminal and `npm run dev -- --host 127.0.0.1 --port 5173 --strictPort` in another, then open `http://127.0.0.1:5173/?view=merchant-cycle`. To enable the existing Flow harness link locally, supply `VITE_FLOW_API_BASE_URL=https://one-gateway-flow-demo.bryfeng.workers.dev` when starting Vite.
+
+The API listens only on `127.0.0.1:8790`; Vite forwards `/demo-api` to it. State survives browser refreshes and is shared across tabs, but resets when the API process restarts. `npm run test:demo` checks the mock's HTTP behavior. The new checkout and merchant event receipts are simulations; they do not call Dynamic or ONE, reconcile a real Flow, or move funds. The real Flow testnet harness remains a separate proof path. This addition has not been deployed to the public demo; GitHub Pages alone cannot run its Node backend.
+
+The mock reuses ONE's published account response shape for two read endpoints. `/gateway/v3/*` is a proposed Gateway contract; `/demo/*` is rehearsal control. Neither is represented as an existing ONE endpoint. Source confirmation does not mark settlement complete, and a merchant self-custody receipt does not credit a ONE fiat balance.
+
 ## iGaming-first walkthrough
 
 1. Open the EUR, GBP and USD accounts to view and copy their fictional bank details.
